@@ -12,49 +12,54 @@ If in any doubt, refer to the technical documentations that is available on the
 Internet:  <https://sim2net.readthedocs.org/en/latest/>.
 """
 
-
 from sim2net.application import Application
+from sim2net.mobility._mobility import Mobility
 
+class EBOADMEN_CICHR(Mobility):
+    def __init__(self, number_nodes, number_mobile_nodes):
+        Mobility.__init__(self, "EBOADMEN-CICHR")
 
-class HelloWorld(Application):
-    """
-    A "Hello World" example with two nodes: the node with ID equal 0 sends a
-    message that should be received and printed by the node with ID equal to 1.
-    (See also the ``configuration.py`` file.)
+        print("%d and %d" % (number_nodes, number_mobile_nodes))
 
-    For more information about the methods that follows refer to the technical
-    documentation:
-    """
+    def get_current_position(self, node_id, node_speed, node_coordinates):
+        return node_coordinates
 
+class Node(Application):
     def initialize(self, node_id, shared):
         """
         Initialization method.
         """
-        self.__node_id = node_id
-        print '[node %d] initialize' % self.__node_id
+        self.node_id = node_id
 
     def finalize(self, shared):
         """
         Finalization method.
         """
-        print '[node %d] finalize' % self.__node_id
 
     def failure(self, time, shared):
         """
         This method is called only if the node crashes.
         """
-        print ('[node %d] failure @ (%d, %2f)'
-               % (self.__node_id, time[0], time[1]))
 
     def main(self, time, communication, neighbors, shared):
         """
         This method is called at each simulation step.
         """
-        if self.__node_id == 0 and time[0] == 1:
+        if self.node_id == 0 and time[0] == 1:
             communication.send('Hello World!')
         while True:
             msg = communication.receive()
             if msg is None:
                 break
             print ('[node %d] message from node %d: "%s"'
-                   % (self.__node_id, msg[0], msg[1]))
+                   % (self.node_id, msg[0], msg[1]))
+
+execfile("./configuration.py")
+
+# pylint:disable=undefined-variable,used-before-assignment
+nodes_number = nodes_number
+# pylint:disable=undefined-variable,used-before-assignment
+mobile_nodes_number = mobile_nodes_number
+
+## mobility
+mobility = [EBOADMEN_CICHR, {'number_nodes': nodes_number, 'number_mobile_nodes': mobile_nodes_number}]
