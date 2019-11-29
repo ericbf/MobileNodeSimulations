@@ -1,65 +1,25 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 
+import sys
+import random
 
-# For bug reports, feature and support requests please visit
-# <https://github.com/mkalewski/sim2net/issues>.
+from algorithm import Algorithm
 
-"""
-sim2net -- simulation application file.
+from configuration import number_nodes_that_are_mobile, mapCoordinates, static_node_battery, Map
 
-If in any doubt, refer to the technical documentations that is available on the
-Internet:  <https://sim2net.readthedocs.org/en/latest/>.
-"""
-
-from sim2net.application import Application
-from sim2net.mobility._mobility import Mobility
-
-class EBOADMEN_CICHR(Mobility):
-    def __init__(self, number_nodes, number_mobile_nodes):
-        Mobility.__init__(self, "EBOADMEN-CICHR")
-
-        print("%d and %d" % (number_nodes, number_mobile_nodes))
-
-    def get_current_position(self, node_id, node_speed, node_coordinates):
-        return node_coordinates
-
-class Node(Application):
-    def initialize(self, node_id, shared):
+class EBOADMEN_CICHR(Algorithm):
+    def step(self):
         """
-        Initialization method.
+            Do a simulation step. Calculate any actions to be done, move nodes, reduce battery, etc. Call `sys.exit()` to exit the simulation (when the network is dead).
         """
-        self.node_id = node_id
+        for node in self.nodes.values():
+            node.battery = max(0, node.battery - random.random())
 
-    def finalize(self, shared):
-        """
-        Finalization method.
-        """
+            if node.battery == 0:
+                print "Quitting at time %d because of %s" % (self.time, node)
 
-    def failure(self, time, shared):
-        """
-        This method is called only if the node crashes.
-        """
-
-    def main(self, time, communication, neighbors, shared):
-        """
-        This method is called at each simulation step.
-        """
-        if self.node_id == 0 and time[0] == 1:
-            communication.send('Hello World!')
-        while True:
-            msg = communication.receive()
-            if msg is None:
-                break
-            print ('[node %d] message from node %d: "%s"'
-                   % (self.node_id, msg[0], msg[1]))
+                sys.exit()
 
 execfile("./configuration.py")
 
-# pylint:disable=undefined-variable,used-before-assignment
-nodes_number = nodes_number
-# pylint:disable=undefined-variable,used-before-assignment
-mobile_nodes_number = mobile_nodes_number
-
-## mobility
-mobility = [EBOADMEN_CICHR, {'number_nodes': nodes_number, 'number_mobile_nodes': mobile_nodes_number}]
+mobility = [EBOADMEN_CICHR]

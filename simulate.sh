@@ -1,1 +1,1 @@
-PYTHONPATH="$(pwd)" sim2net $@ $@
+PYTHONPATH="$(pwd)" sim2net $@ node.py
