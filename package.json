@@ -17,7 +17,14 @@
 	},
 	"homepage": "https://github.com/ericbf/MobileNodeSimulations#readme",
 	"devDependencies": {
+		"@types/d3-delaunay": "^4.1.0",
+		"@types/node": "^12.12.14",
 		"ts-node": "^8.5.4",
 		"typescript": "^3.7.2"
+	},
+	"dependencies": {
+		"array.prototype.flat": "^1.2.2",
+		"array.prototype.flatmap": "^1.2.2",
+		"d3-delaunay": "^5.1.6"
 	}
 }
