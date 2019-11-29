@@ -1,0 +1,23 @@
+{
+	"name": "mobile-node-simulations",
+	"version": "0.0.1",
+	"description": "A package with a couple simulations of some different mobile node dispatch algorithms.",
+	"main": "src/index.ts",
+	"scripts": {
+		"start": "ts-node ."
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/ericbf/MobileNodeSimulations.git"
+	},
+	"author": "Eric Ferreira <2483476+ericbf@users.noreply.github.com>",
+	"license": "UNLICENSED",
+	"bugs": {
+		"url": "https://github.com/ericbf/MobileNodeSimulations/issues"
+	},
+	"homepage": "https://github.com/ericbf/MobileNodeSimulations#readme",
+	"devDependencies": {
+		"ts-node": "^8.5.4",
+		"typescript": "^3.7.2"
+	}
+}

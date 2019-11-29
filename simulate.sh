@@ -1,1 +1,0 @@
-PYTHONPATH="$(pwd)" sim2net $@ node.py

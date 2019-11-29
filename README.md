@@ -2,9 +2,14 @@
 
 This repo contains some simulations of some wireless sensor networks with mobile nodes for repairing holes.
 
-# To Run
+## Environment Setup
 
-You can use the included script, `simulate.sh`, to run a simulation.
+This project depends on [node](https://nodejs.org/en/). Once you have node installed, install project dependencies by running `npm i` in the project directory in a terminal.
 
-1. Edit the config file if and as wanted.
-2. Run `./simulate.sh <implementation>` (as in `./simulate.sh eboadmen-cichr.py`)
+## To Run
+
+1. Run `npm run start`
+
+## Development
+
+The entrypoint for the project is the `src/index.ts` file. This is the file that gets run when you run `npm run start`. You can implement algorithms under the `src/algorithms` directory.
