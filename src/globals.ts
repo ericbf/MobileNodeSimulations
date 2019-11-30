@@ -13,6 +13,12 @@ declare global {
 		/** Removes any elements that equal the passed element from the array in place, and return the same array. */
 		remove(element: T): T[]
 	}
+
+	interface ObjectConstructor {
+		entries<T, K extends keyof T>(obj: T): [string, T[K]][]
+		keys<T, K extends keyof T>(obj: T): K[]
+		values<T, K extends keyof T>(obj: T): T[K][]
+	}
 }
 
 if (!Array.prototype.flat) {

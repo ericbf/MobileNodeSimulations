@@ -1,6 +1,13 @@
 import { Node } from "../models/node"
 import { Hole } from "../models/hole"
-import { distanceBetween, stringify, withTransposed, transposed, omit } from "../helpers"
+import {
+	distanceBetween,
+	stringify,
+	withTransposed,
+	transposed,
+	omit,
+	Unbox
+} from "../helpers"
 
 export function hba(nodes: Node[], holes: Hole[]): Node[] {
 	/**
@@ -83,7 +90,10 @@ export function hba(nodes: Node[], holes: Hole[]): Node[] {
 	}
 
 	console.log(`Final matrix:\n${stringify(matrix, 0)}`)
-	console.log(`Final lines:`, lines)
+
+	const zeros = findBestZeros(matrix)
+
+	console.log(`Best zeros:`, zeros)
 
 	return []
 }
@@ -170,12 +180,85 @@ function getLines(matrix: number[][]): Line[] {
 		return b.zeros.length - a.zeros.length
 	}
 
-	function getIndicesOfZeros(column: number[]) {
-		return column
-			.map((value, index) => ({ value, index }))
-			.filter(({ value }) => value === 0)
-			.map(({ index }) => index)
+	return lines.map((line) => omit(line, "zeros"))
+}
+
+function findBestZeros(matrix: number[][]) {
+	const zeros = matrix
+		.map(getIndicesOfZeros)
+		.map((zeros: number[], column: number) =>
+			zeros.map((row) => ({
+				column,
+				row,
+				checked: false,
+				crossed: false
+			}))
+		)
+		.flat()
+
+	type Zero = Unbox<typeof zeros>
+	type FrequencyEntry = [number, Zero[]]
+
+	interface FrequencyMap {
+		[index: number]: FrequencyEntry
 	}
 
-	return lines.map((line) => omit(line, "zeros"))
+	const colFrequencies: FrequencyMap = {}
+	const rowFrequencies: FrequencyMap = {}
+
+	for (const zero of zeros) {
+		if (!colFrequencies[zero.column]) {
+			colFrequencies[zero.column] = [0, []]
+		}
+
+		colFrequencies[zero.column][0] += 1
+		colFrequencies[zero.column][1].push(zero)
+
+		if (!rowFrequencies[zero.row]) {
+			rowFrequencies[zero.row] = [0, []]
+		}
+
+		rowFrequencies[zero.row][0] += 1
+		rowFrequencies[zero.row][1].push(zero)
+	}
+
+	console.log(colFrequencies)
+	console.log(rowFrequencies)
+
+	for (const [frequency, zeros] of Object.values(colFrequencies)) {
+		if (frequency === 1) {
+			const zero = zeros[0]
+
+			zero.checked = true
+
+			rowFrequencies[zero.row][1].forEach((zero) => {
+				if (!zero.checked) {
+					zero.crossed = true
+				}
+			})
+		}
+	}
+
+	for (const [frequency, zeros] of Object.values(rowFrequencies)) {
+		if (frequency === 1) {
+			const zero = zeros[0]
+
+			zero.checked = true
+
+			colFrequencies[zero.column][1].forEach((zero) => {
+				if (!zero.checked) {
+					zero.crossed = true
+				}
+			})
+		}
+	}
+
+	return zeros
+}
+
+function getIndicesOfZeros(column: number[]) {
+	return column
+		.map((value, index) => ({ value, index }))
+		.filter(({ value }) => value === 0)
+		.map(({ index }) => index)
 }
