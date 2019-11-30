@@ -1,16 +1,19 @@
 import "./globals"
 
 import { Delaunay } from "d3-delaunay"
+import { promises as fs } from "fs"
 
-// import { promises as fs } from "fs"
 import { Positionable } from "./models/positionable"
 import { hba } from "./algorithms/hba"
 import { Node } from "./models/node"
 
+const shouldRound = true
 const sensingRange = 5
+const numberStaticNodes = 28
+const fieldSize = 50
 
 /** Create a list of nodes with random coordinates. If `howMany` is ≥ the square of `fieldSize`, it won't work, so don't do that. */
-export function randomlyPlaceNodes(howMany = 28, fieldSize = 50) {
+export function randomlyPlaceNodes(howMany = numberStaticNodes): Node[] {
 	function make(_: any, id: number) {
 		return round({
 			id,
@@ -66,13 +69,15 @@ export function sort(lhs: Positionable | number[], rhs: Positionable | number[])
 
 export function round<T extends Positionable | number[]>(pos: T): T
 export function round(pos: Positionable | number[]) {
-	return Array.isArray(pos)
-		? pos.map(Math.round)
-		: {
-				...pos,
-				x: Math.round(pos.x),
-				y: Math.round(pos.y)
-		  }
+	return shouldRound
+		? Array.isArray(pos)
+			? pos.map(Math.round)
+			: {
+					...pos,
+					x: Math.round(pos.x),
+					y: Math.round(pos.y)
+			  }
+		: pos
 }
 
 export function mapPairs(pair: number[]) {
@@ -94,7 +99,7 @@ export function isUnique(pos: Positionable, i: number, arr: Positionable[]) {
 
 const staticNodes = randomlyPlaceNodes()
 const delaunay = Delaunay.from(staticNodes.map(mapCoordinates))
-const voronoi = delaunay.voronoi([0, 0, 50, 50])
+const voronoi = delaunay.voronoi([0, 0, fieldSize, fieldSize])
 
 const holes = Array.from(voronoi.cellPolygons())
 	.flat()
@@ -106,6 +111,21 @@ const holes = Array.from(voronoi.cellPolygons())
 		return staticNodes.every((node) => distanceBetween(pos, node) > sensingRange)
 	})
 	.map((pos) => ({ ...pos, confidence: 0 }))
+
+const holeDelauney = Delaunay.from(holes.map(mapCoordinates))
+const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${fieldSize} ${fieldSize}">
+        <path stroke-width="0.2" stroke="black" d="${voronoi.render()}"/>
+        <path stroke="none" fill="black" d="${delaunay.renderPoints(undefined, 0.2)}"/>
+        <path stroke-width="0.2" stroke="blue" fill="none" d="${delaunay.renderPoints(
+					undefined,
+					sensingRange
+				)}"/>
+        <path stroke="none" fill="red" d="${holeDelauney.renderPoints(undefined, 0.25)}"/>
+    </svg>
+`
+// This will draw the field on an svg, just for funzies
+fs.writeFile(`field.svg`, svg)
 
 const mobileNodes = randomlyPlaceNodes()
 
