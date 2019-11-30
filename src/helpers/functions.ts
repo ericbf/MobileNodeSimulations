@@ -116,3 +116,17 @@ export function stringify(matrix: number[][], precision = 1) {
 		})
 		.join(`\n`)
 }
+
+/** Return a version of the passed object which omits the properties with the passed keys. */
+export function omit<T extends object, K extends keyof T>(obj: T, ...keys: K[]) {
+	const ret = {} as { [P in Exclude<keyof T, K>]: T[P] }
+
+	Object.keys(obj).forEach((k) => {
+		if (!keys.includes(k as K)) {
+			// tslint:disable-next-line: no-any
+			ret[k as keyof typeof ret] = obj[k as K] as any
+		}
+	})
+
+	return ret
+}
