@@ -28,9 +28,62 @@ export function hba(nodes: Node[], holes: Hole[]): Node[] {
 
 	let lines = getLines(matrix)
 
-	console.log(lines)
-	// while (lines.length < matrix.length) {
-	// }
+	console.log(`Initial lines:`, lines)
+
+	interface LineMap {
+		[index: number]: boolean
+	}
+
+	let colLinesByIndex: LineMap
+	let rowLinesByIndex: LineMap
+
+	function getLineMap() {
+		return Array.from({ length: matrix.length }).reduce<LineMap>((trans, _, i) => {
+			trans[i] = false
+
+			return trans
+		}, {})
+	}
+
+	while (lines.length < matrix.length) {
+		colLinesByIndex = getLineMap()
+		rowLinesByIndex = getLineMap()
+
+		for (const line of lines) {
+			;(line.column ? colLinesByIndex : rowLinesByIndex)[line.index] = true
+		}
+
+		let uncoveredMin = Infinity
+
+		for (const [i, column] of matrix.entries()) {
+			for (const [j, value] of column.entries()) {
+				if (!colLinesByIndex[i] && !rowLinesByIndex[j] && value < uncoveredMin) {
+					uncoveredMin = value
+				}
+			}
+		}
+
+		console.log(`Uncovered min is ${uncoveredMin}`)
+
+		for (const [column, colLined] of Object.entries(colLinesByIndex)) {
+			const i = parseInt(column, 10)
+
+			for (const [row, rowLined] of Object.entries(rowLinesByIndex)) {
+				const j = parseInt(row, 10)
+
+				if (colLined && rowLined) {
+					matrix[i][j] += uncoveredMin
+				} else if (!colLined && !rowLined) {
+					matrix[i][j] -= uncoveredMin
+				}
+			}
+		}
+
+		lines = getLines(matrix)
+	}
+
+	console.log(`Final matrix:\n${stringify(matrix, 0)}`)
+	console.log(`Final lines:`, lines)
 
 	return []
 }
