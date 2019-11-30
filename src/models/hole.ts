@@ -1,5 +1,5 @@
-import { Positionable } from "./positionable"
+import { Coordinate } from "./position"
 
-export interface Hole extends Positionable {
+export interface Hole extends Coordinate {
 	confidence: number
 }

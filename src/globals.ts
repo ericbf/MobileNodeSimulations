@@ -1,3 +1,5 @@
+import { Flatten } from "./helpers"
+
 declare global {
 	interface Array<T> {
 		flat(levels?: 1): Flatten<T>
@@ -16,7 +18,5 @@ if (!Array.prototype.flat) {
 if (!Array.prototype.flatMap) {
 	require("array.prototype.flatmap/auto")
 }
-
-export type Flatten<T> = T extends Array<infer U> ? U[] : T[]
 
 export {}

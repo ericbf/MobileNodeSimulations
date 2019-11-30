@@ -1,5 +1,5 @@
-import { Positionable } from "./positionable"
+import { Coordinate } from "./position"
 
-export interface Node extends Positionable {
+export interface Node extends Coordinate {
 	id: number
 }
