@@ -2,6 +2,10 @@ import { Flatten } from "./helpers"
 
 declare global {
 	interface Array<T> {
+		random: T
+		first: T
+		last: T
+
 		flat(levels?: 1): Flatten<T>
 		flat(levels: 0): T[]
 		flat(levels: 2): Flatten<Flatten<T>>
@@ -27,6 +31,39 @@ if (!Array.prototype.flat) {
 
 if (!Array.prototype.flatMap) {
 	require("array.prototype.flatmap/auto")
+}
+
+if (!Array.prototype.first) {
+	Object.defineProperty(Array.prototype, "first", {
+		get<T>(this: T[]) {
+			return this[0]
+		},
+		set<T>(this: T[], newValue: T) {
+			return (this[0] = newValue)
+		}
+	})
+}
+
+if (!Array.prototype.last) {
+	Object.defineProperty(Array.prototype, "last", {
+		get<T>(this: T[]) {
+			return this[Math.max(this.length - 1, 0)]
+		},
+		set<T>(this: T[], newValue: T) {
+			return (this[Math.max(this.length - 1, 0)] = newValue)
+		}
+	})
+}
+
+if (!Array.prototype.random) {
+	Object.defineProperty(Array.prototype, "random", {
+		get<T>(this: T[]) {
+			return this[Math.floor(Math.random() * this.length)]
+		},
+		set<T>(this: T[], newValue: T) {
+			return (this[Math.floor(Math.random() * this.length)] = newValue)
+		}
+	})
 }
 
 if (!Array.prototype.remove) {

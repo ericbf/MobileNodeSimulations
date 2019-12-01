@@ -11,9 +11,11 @@ import {
 	isUnique,
 	toCoordinate,
 	distanceBetween,
-	toCartesian
+	toCartesian,
+	info
 } from "./helpers"
 
+export const verbosity: "debug" | "info" | "quiet" = "debug"
 export const shouldRound = false
 export const sensingRange = 1
 export const sensingConfidence = 0.8
@@ -85,14 +87,14 @@ export const fieldSize = 5
 
 // const mobileNodes = randomlyPlaceNodes()
 
-// console.log(`Number nodes: ${mobileNodes.length}`)
-// console.log(`Number holes: ${holes.length}`)
+// info(`Number nodes: ${mobileNodes.length}`)
+// info(`Number holes: ${holes.length}`)
 
 // hba(mobileNodes, holes)
 
-// console.log(hbaResult)
+// info(hba(mobileNodes, holes))
 
-hba([], [])
+info(hba([], []))
 
 // const holeDelauney = Delaunay.from(holes.map(toCartesian))
 // const svg = `

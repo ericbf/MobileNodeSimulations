@@ -6,8 +6,10 @@ import {
 	withTransposed,
 	transposed,
 	omit,
-	Unbox
+	Unbox,
+	debug
 } from "../helpers"
+import { verbosity } from ".."
 
 export function hba(nodes: Node[], holes: Hole[]): Node[] {
 	/**
@@ -23,19 +25,19 @@ export function hba(nodes: Node[], holes: Hole[]): Node[] {
 
 	// The above matrix is the one from the paper, for testing purposes. It looks transposed, but that's because of the way that it works. It's indexed correctly now – matrix[x][y].
 
-	console.log(`Distance matrix:\n${stringify(matrix, 0)}`)
+	debug(`Distance matrix:\n${stringify(matrix, 0)}`)
 
 	matrix = withTransposed(matrix, subtractColumns)
 
-	console.log(`Subtracted row:\n${stringify(matrix, 0)}`)
+	debug(`Subtracted row:\n${stringify(matrix, 0)}`)
 
 	matrix = subtractColumns(matrix)
 
-	console.log(`Subtracted column:\n${stringify(matrix, 0)}`)
+	debug(`Subtracted column:\n${stringify(matrix, 0)}`)
 
 	let lines = getLines(matrix)
 
-	console.log(`Initial lines:`, lines)
+	debug(`Initial lines:`, lines)
 
 	interface LineMap {
 		[index: number]: boolean
@@ -57,7 +59,7 @@ export function hba(nodes: Node[], holes: Hole[]): Node[] {
 		rowLinesByIndex = getLineMap()
 
 		for (const line of lines) {
-			;(line.column ? colLinesByIndex : rowLinesByIndex)[line.index] = true
+			;(line.isColumn ? colLinesByIndex : rowLinesByIndex)[line.index] = true
 		}
 
 		let uncoveredMin = Infinity
@@ -70,7 +72,7 @@ export function hba(nodes: Node[], holes: Hole[]): Node[] {
 			}
 		}
 
-		console.log(`Uncovered min is ${uncoveredMin}`)
+		debug(`Uncovered min is ${uncoveredMin}`)
 
 		for (const [column, colLined] of Object.entries(colLinesByIndex)) {
 			const i = parseInt(column, 10)
@@ -89,13 +91,28 @@ export function hba(nodes: Node[], holes: Hole[]): Node[] {
 		lines = getLines(matrix)
 	}
 
-	console.log(`Final matrix:\n${stringify(matrix, 0)}`)
+	debug(`Final matrix:\n${stringify(matrix, 0)}`)
 
 	const zeros = findBestZeros(matrix)
 
-	console.log(`Best zeros:`, zeros)
+	debug(`Best zeros:`, zeros)
 
-	return []
+	if (verbosity === "debug") {
+		// Fill the matrix with zeros
+		matrix = matrix.map((column) => column.map(() => 0))
+
+		// Put 1s in the result spots
+		zeros
+			.filter(({ checked }) => checked)
+			.forEach(({ column, row }) => (matrix[column][row] = 1))
+
+		// Result
+		debug(`Result:\n${stringify(matrix, 0)}`)
+	}
+
+	return zeros
+		.filter(({ checked }) => checked)
+		.map(({ column, row }) => ({ ...nodes[column], ...holes[row] }))
 }
 
 /** Create a square distance matrix with each column is the distance from a node to each hole. If the number of nodes isn't equal the number of holes, fill the array with `NaN` to make it square. */
@@ -129,7 +146,7 @@ export function subtractColumns(matrix: number[][]) {
 
 interface Line {
 	/** Whether this is a row or a column. */
-	column: boolean
+	isColumn: boolean
 	/** The row/column index of this line. */
 	index: number
 }
@@ -146,7 +163,7 @@ function getLines(matrix: number[][]): Line[] {
 
 	const inColumns: MaybeLine[] = matrix
 		.map((column, index) => ({
-			column: true,
+			isColumn: true,
 			index,
 			zeros: getIndicesOfZeros(column)
 		}))
@@ -154,7 +171,7 @@ function getLines(matrix: number[][]): Line[] {
 
 	const inRows: MaybeLine[] = transposed(matrix)
 		.map((row, index) => ({
-			column: false,
+			isColumn: false,
 			index,
 			zeros: getIndicesOfZeros(row)
 		}))
@@ -170,7 +187,7 @@ function getLines(matrix: number[][]): Line[] {
 		lines.push(next)
 
 		allLines
-			.filter(({ column }) => column !== next.column)
+			.filter(({ isColumn: column }) => column !== next.isColumn)
 			.forEach(({ zeros }) => zeros.remove(next.index))
 
 		allLines = allLines.filter(({ zeros }) => zeros.length > 0).sort(lineSorter)
@@ -197,7 +214,12 @@ function findBestZeros(matrix: number[][]) {
 		.flat()
 
 	type Zero = Unbox<typeof zeros>
-	type FrequencyEntry = [number, Zero[]]
+	interface FrequencyEntry {
+		isColumn: boolean
+		index: number
+		frequency: number
+		zeros: Zero[]
+	}
 
 	interface FrequencyMap {
 		[index: number]: FrequencyEntry
@@ -208,49 +230,77 @@ function findBestZeros(matrix: number[][]) {
 
 	for (const zero of zeros) {
 		if (!colFrequencies[zero.column]) {
-			colFrequencies[zero.column] = [0, []]
+			colFrequencies[zero.column] = {
+				isColumn: true,
+				index: zero.column,
+				frequency: 0,
+				zeros: []
+			}
 		}
 
-		colFrequencies[zero.column][0] += 1
-		colFrequencies[zero.column][1].push(zero)
+		colFrequencies[zero.column].frequency += 1
+		colFrequencies[zero.column].zeros.push(zero)
 
 		if (!rowFrequencies[zero.row]) {
-			rowFrequencies[zero.row] = [0, []]
+			rowFrequencies[zero.row] = {
+				isColumn: false,
+				index: zero.row,
+				frequency: 0,
+				zeros: []
+			}
 		}
 
-		rowFrequencies[zero.row][0] += 1
-		rowFrequencies[zero.row][1].push(zero)
+		rowFrequencies[zero.row].frequency += 1
+		rowFrequencies[zero.row].zeros.push(zero)
 	}
 
-	console.log(colFrequencies)
-	console.log(rowFrequencies)
+	function checkZeros(
+		primary: FrequencyMap,
+		pKey: "column" | "row",
+		secondary: FrequencyMap,
+		sKey: "column" | "row",
+		threshold: number
+	) {
+		for (const { frequency, zeros } of Object.values(primary)) {
+			if (frequency === threshold) {
+				const zero = zeros.random
 
-	for (const [frequency, zeros] of Object.values(colFrequencies)) {
-		if (frequency === 1) {
-			const zero = zeros[0]
+				zero.checked = true
 
-			zero.checked = true
+				secondary[zero[sKey]].zeros.forEach((zero) => {
+					if (!zero.checked) {
+						zero.crossed = true
 
-			rowFrequencies[zero.row][1].forEach((zero) => {
-				if (!zero.checked) {
-					zero.crossed = true
-				}
-			})
+						const frequency = primary[zero[pKey]]
+
+						frequency.frequency -= 1
+						frequency.zeros.remove(zero)
+					}
+				})
+
+				delete primary[zero[pKey]]
+				delete secondary[zero[sKey]]
+			}
 		}
 	}
 
-	for (const [frequency, zeros] of Object.values(rowFrequencies)) {
-		if (frequency === 1) {
-			const zero = zeros[0]
+	function hasWithin(map: FrequencyMap, threshold: number) {
+		return Object.values(map).find(({ frequency }) => frequency === threshold) != null
+	}
 
-			zero.checked = true
+	function isEmpty(map: FrequencyMap) {
+		return Object.values(map).length === 0
+	}
 
-			colFrequencies[zero.column][1].forEach((zero) => {
-				if (!zero.checked) {
-					zero.crossed = true
-				}
-			})
-		}
+	let threshold = 1
+
+	while (
+		hasWithin(colFrequencies, threshold) ||
+		hasWithin(rowFrequencies, threshold) ||
+		((!isEmpty(colFrequencies) || !isEmpty(rowFrequencies)) && threshold++)
+	) {
+		checkZeros(colFrequencies, "column", rowFrequencies, "row", threshold)
+		checkZeros(rowFrequencies, "row", colFrequencies, "column", threshold)
 	}
 
 	return zeros

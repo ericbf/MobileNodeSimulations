@@ -1,4 +1,4 @@
-import { shouldRound } from ".."
+import { shouldRound, verbosity } from ".."
 import { Position } from "../models/position"
 
 /**
@@ -129,4 +129,24 @@ export function omit<T extends object, K extends keyof T>(obj: T, ...keys: K[]) 
 	})
 
 	return ret
+}
+
+/**
+ * Write something to log if verbosity is set to debug.
+ * @param args The args to write to log.
+ */
+export function debug(...args: any[]) {
+	if (verbosity === "debug") {
+		console.log(...args)
+	}
+}
+
+/**
+ * Write something to log if verbosity is set to info or debug.
+ * @param args The args to write to log.
+ */
+export function info(...args: any[]) {
+	if (verbosity === "debug" || verbosity === "info") {
+		console.log(...args)
+	}
 }
