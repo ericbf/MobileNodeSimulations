@@ -14,7 +14,7 @@ declare global {
 
 		flatMap<U>(callback: (currentValue: T, index: number, array: T[]) => U[]): U[]
 
-		/** Removes any elements that equal the passed element from the array in place, and return the same array. */
+		/** Removes any elements that equal the passed element from the array in place, and return removed elements. */
 		remove(element: T): T[]
 	}
 
@@ -69,13 +69,15 @@ if (!Array.prototype.random) {
 if (!Array.prototype.remove) {
 	Object.defineProperty(Array.prototype, "remove", {
 		value<T>(this: T[], element: T) {
+			let removed: T[] = []
+
 			for (let i = this.length - 1; i >= 0; i--) {
 				if (element === this[i]) {
-					this.splice(i, 1)
+					removed.push(...this.splice(i, 1))
 				}
 			}
 
-			return this
+			return removed
 		}
 	})
 }

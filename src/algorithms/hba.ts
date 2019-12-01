@@ -6,7 +6,6 @@ import {
 	withTransposed,
 	transposed,
 	omit,
-	Unbox,
 	debug
 } from "../helpers"
 import { verbosity } from ".."
@@ -16,6 +15,8 @@ export function hba(nodes: Node[], holes: Hole[]): Node[] {
 	 * The coefficient matrix, `matrix[i][j]`. The `i`s are node index, and the `j`s are the hole index.
 	 */
 	let matrix = createDistanceMatrix(nodes, holes)
+
+	const original = matrix
 
 	// The above matrix is the one from the paper, for testing purposes. It looks transposed, but that's because of the way that it works. It's indexed correctly now – matrix[x][y].
 
@@ -33,26 +34,14 @@ export function hba(nodes: Node[], holes: Hole[]): Node[] {
 
 	debug(`Lines are:`, lines)
 
-	interface LineMap {
-		[index: number]: boolean
-	}
-
 	let colLinesByIndex: LineMap
 	let rowLinesByIndex: LineMap
-
-	function getLineMap() {
-		return Array.from({ length: matrix.length }).reduce<LineMap>((trans, _, i) => {
-			trans[i] = false
-
-			return trans
-		}, {})
-	}
 
 	const neededLines = Math.min(nodes.length, holes.length)
 
 	while (lines.length < neededLines) {
-		colLinesByIndex = getLineMap()
-		rowLinesByIndex = getLineMap()
+		colLinesByIndex = getEmptyLineMap(matrix)
+		rowLinesByIndex = getEmptyLineMap(matrix)
 
 		for (const line of lines) {
 			;(line.isColumn ? colLinesByIndex : rowLinesByIndex)[line.index] = true
@@ -91,13 +80,11 @@ export function hba(nodes: Node[], holes: Hole[]): Node[] {
 		debug(`Lines are now:`, lines)
 	}
 
-	if (lines.length > neededLines) {
-		lines.length = neededLines
-	}
-
 	debug(`Final matrix:\n${stringify(matrix, 1)}`)
 
-	const zeros = findBestZeros(matrix)
+	const zeros = findZeros({ matrix, original })
+
+	checkAndCrossZeros(getZeroFrequencies(zeros))
 
 	debug(`Zeros:`, zeros)
 
@@ -157,11 +144,23 @@ export function subtractColumns(matrix: number[][]) {
 	return matrix
 }
 
-interface Line {
+export interface Line {
 	/** Whether this is a row or a column. */
 	isColumn: boolean
 	/** The row/column index of this line. */
 	index: number
+}
+
+export interface LineMap {
+	[index: number]: boolean
+}
+
+export function getEmptyLineMap(matrix: number[][]) {
+	return Array.from({ length: matrix.length }).reduce<LineMap>((trans, _, i) => {
+		trans[i] = false
+
+		return trans
+	}, {})
 }
 
 /**
@@ -213,31 +212,54 @@ export function getLines(matrix: number[][]): Line[] {
 	return lines.map((line) => omit(line, "zeros"))
 }
 
-export function findBestZeros(matrix: number[][]) {
-	const zeros = matrix
+export interface Zero {
+	column: number
+	row: number
+	checked: boolean
+	crossed: boolean
+	value: number
+}
+
+export function findZeros({
+	matrix,
+	original
+}: {
+	matrix: number[][]
+	original: number[][]
+}) {
+	return matrix
 		.map(getIndicesOfZeros)
 		.map((zeros: number[], column: number) =>
 			zeros.map((row) => ({
 				column,
 				row,
 				checked: false,
-				crossed: false
+				crossed: false,
+				value: original[column][row]
 			}))
 		)
 		.flat()
+}
 
-	type Zero = Unbox<typeof zeros>
-	interface FrequencyEntry {
-		isColumn: boolean
-		index: number
-		frequency: number
-		zeros: Zero[]
-	}
+export function getIndicesOfZeros(column: number[]) {
+	return column
+		.map((value, index) => ({ value, index }))
+		.filter(({ value }) => value === 0)
+		.map(({ index }) => index)
+}
 
-	interface FrequencyMap {
-		[index: number]: FrequencyEntry
-	}
+export interface FrequencyEntry {
+	isColumn: boolean
+	index: number
+	frequency: number
+	zeros: Zero[]
+}
 
+export interface FrequencyMap {
+	[index: number]: FrequencyEntry
+}
+
+export function getZeroFrequencies(zeros: Zero[]) {
 	const colFrequencies: FrequencyMap = {}
 	const rowFrequencies: FrequencyMap = {}
 
@@ -270,47 +292,32 @@ export function findBestZeros(matrix: number[][]) {
 		row.zeros.push(zero)
 	}
 
-	function checkZeros(
-		primary: FrequencyMap,
-		pKey: "column" | "row",
-		secondary: FrequencyMap,
-		sKey: "column" | "row",
-		threshold: number
-	) {
-		for (const [indexAsString, { frequency, zeros }] of Object.entries(primary)) {
-			const index = parseInt(indexAsString, 10)
+	return { colFrequencies, rowFrequencies }
+}
 
-			if (frequency <= threshold) {
-				const zero = zeros.random
-
-				if (zero) {
-					zero.checked = true
-
-					secondary[zero[sKey]].zeros.forEach((zero) => {
-						if (!zero.checked) {
-							zero.crossed = true
-
-							const frequency = primary[zero[pKey]]
-
-							if (frequency) {
-								frequency.frequency -= 1
-								frequency.zeros.remove(zero)
-							} else {
-								debug("Would have failed")
-							}
-						}
-					})
-
-					delete secondary[zero[sKey]]
-				}
-
-				delete primary[index]
-			}
-		}
+function checkAndCrossZeros({
+	colFrequencies,
+	rowFrequencies
+}: {
+	colFrequencies: FrequencyMap
+	rowFrequencies: FrequencyMap
+}) {
+	function doCheckFor(map: FrequencyMap, threshold: number) {
+		Object.values(map)
+			.filter(({ frequency }) => frequency <= threshold)
+			.map(({ zeros }) => zeros)
+			.forEach((zeros) =>
+				checkZeros({
+					colFrequencies,
+					rowFrequencies,
+					zeros
+				})
+			)
 	}
 
 	function hasWithin(map: FrequencyMap, threshold: number) {
-		return Object.values(map).find(({ frequency }) => frequency === threshold) != null
+		const index = Object.values(map).findIndex(({ frequency }) => frequency <= threshold)
+		return index >= 0
 	}
 
 	function isEmpty(map: FrequencyMap) {
@@ -324,16 +331,60 @@ export function findBestZeros(matrix: number[][]) {
 		hasWithin(rowFrequencies, threshold) ||
 		((!isEmpty(colFrequencies) || !isEmpty(rowFrequencies)) && threshold++)
 	) {
-		checkZeros(colFrequencies, "column", rowFrequencies, "row", threshold)
-		checkZeros(rowFrequencies, "row", colFrequencies, "column", threshold)
+		doCheckFor(colFrequencies, threshold)
+		doCheckFor(rowFrequencies, threshold)
 	}
-
-	return zeros
 }
 
-export function getIndicesOfZeros(column: number[]) {
-	return column
-		.map((value, index) => ({ value, index }))
-		.filter(({ value }) => value === 0)
-		.map(({ index }) => index)
+export function checkZeros({
+	colFrequencies,
+	rowFrequencies,
+	zeros
+}: {
+	colFrequencies: FrequencyMap
+	rowFrequencies: FrequencyMap
+	zeros: Zero[]
+}) {
+	for (const zero of zeros) {
+		if (!zero.checked && !zero.crossed) {
+			zero.checked = true
+
+			crossAndRemoveZeros({ colFrequencies, rowFrequencies, forZero: zero })
+
+			delete colFrequencies[zero.column]
+			delete rowFrequencies[zero.row]
+		}
+	}
+}
+
+export function crossAndRemoveZeros({
+	colFrequencies,
+	rowFrequencies,
+	forZero
+}: {
+	colFrequencies: FrequencyMap
+	rowFrequencies: FrequencyMap
+	forZero: Zero
+}) {
+	const remove = (fromColumns: boolean) => (other: Zero) => {
+		if (other !== forZero) {
+			other.crossed = true
+
+			const entry = fromColumns ? rowFrequencies[other.row] : colFrequencies[other.column]
+
+			entry.frequency -= 1
+			entry.zeros.remove(other)
+
+			if (entry.zeros.length === 0) {
+				if (fromColumns) {
+					delete rowFrequencies[other.row]
+				} else {
+					delete colFrequencies[other.column]
+				}
+			}
+		}
+	}
+
+	colFrequencies[forZero.column].zeros.forEach(remove(true))
+	rowFrequencies[forZero.row].zeros.forEach(remove(false))
 }

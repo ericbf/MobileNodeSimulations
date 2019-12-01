@@ -93,20 +93,74 @@ function placeField() {
 	return { staticNodes, mobileNodes, holes }
 }
 
-for (let i = 0; i < 100; i++) {
+let hbaWin = 0
+let hbaTotalTotal = 0
+let hbaWinTotal = 0
+let hbaLoseTotal = 0
+
+let tie = 0
+
+let novelWin = 0
+let novelTotalTotal = 0
+let novelWinTotal = 0
+let novelLoseTotal = 0
+
+for (let i = 0; i < 1000 || hbaWinTotal === 0; i++) {
 	const { mobileNodes, holes } = placeField()
 
 	debug(`Number nodes: ${mobileNodes.length}`)
 	debug(`Number holes: ${holes.length}`)
 
 	const hbaDispatch = hba(mobileNodes, holes)
-	const novelDispatch = novel(mobileNodes, holes)
-
 	const hbaTotal = getTotal(mobileNodes, hbaDispatch)
+
+	hbaTotalTotal += hbaTotal
+
+	const novelDispatch = novel(mobileNodes, holes)
 	const novelTotal = getTotal(mobileNodes, novelDispatch)
 
-	info(`HBA is ${hbaTotal.toFixed(1)} and novel is ${novelTotal.toFixed(1)}`)
+	novelTotalTotal += novelTotal
+
+	if (hbaTotal < novelTotal) {
+		hbaWin += 1
+
+		hbaWinTotal += hbaTotal
+		novelLoseTotal += novelTotal
+	} else if (hbaTotal === novelTotal) {
+		tie += 1
+	} else {
+		novelWin += 1
+
+		hbaLoseTotal += hbaTotal
+		novelWinTotal += novelTotal
+	}
 }
+
+info(`HBA won ${hbaWin}, tied ${tie}, novel won ${novelWin}.`)
+info(
+	`HBA total was ${hbaTotalTotal.toFixed(1)}, novel total was ${novelTotalTotal.toFixed(
+		1
+	)}.`
+)
+info(
+	`On average, novel was ${((1 - novelTotalTotal / hbaTotalTotal) * 100).toFixed(
+		0
+	)}% better.`
+)
+info(
+	novelWinTotal > 0
+		? `For its wins, novel was ${((1 - novelWinTotal / hbaLoseTotal) * 100).toFixed(
+				0
+		  )}% better.`
+		: `Novel never won.`
+)
+info(
+	hbaWinTotal > 0
+		? `For its wins, hba was ${((1 - hbaWinTotal / novelLoseTotal) * 100).toFixed(
+				0
+		  )}% better.`
+		: `HBA never won.`
+)
 
 function getTotal(start: Node[], end: Node[]) {
 	return start.reduce((total, node) => {

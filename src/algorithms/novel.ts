@@ -1,22 +1,25 @@
 import { Node } from "../models/node"
 import { Hole } from "../models/hole"
-import {
-	distanceBetween,
-	stringify,
-	withTransposed,
-	transposed,
-	omit,
-	Unbox,
-	debug
-} from "../helpers"
+import { stringify, debug } from "../helpers"
 import { verbosity } from ".."
-import { subtractColumns, createDistanceMatrix, getLines, findBestZeros } from "./hba"
+import {
+	createDistanceMatrix,
+	getLines,
+	findZeros,
+	getZeroFrequencies,
+	FrequencyMap,
+	checkZeros,
+	LineMap,
+	getEmptyLineMap
+} from "./hba"
 
 export function novel(nodes: Node[], holes: Hole[]): Node[] {
 	/**
 	 * The coefficient matrix, `matrix[i][j]`. The `i`s are node index, and the `j`s are the hole index.
 	 */
 	let matrix = createDistanceMatrix(nodes, holes)
+
+	const original = matrix.map((col) => col.slice(0))
 
 	// The above matrix is the one from the paper, for testing purposes. It looks transposed, but that's because of the way that it works. It's indexed correctly now – matrix[x][y].
 
@@ -26,26 +29,14 @@ export function novel(nodes: Node[], holes: Hole[]): Node[] {
 
 	debug(`Lines are:`, lines)
 
-	interface LineMap {
-		[index: number]: boolean
-	}
-
 	let colLinesByIndex: LineMap
 	let rowLinesByIndex: LineMap
-
-	function getLineMap() {
-		return Array.from({ length: matrix.length }).reduce<LineMap>((trans, _, i) => {
-			trans[i] = false
-
-			return trans
-		}, {})
-	}
 
 	const neededLines = Math.min(nodes.length, holes.length)
 
 	while (lines.length < neededLines) {
-		colLinesByIndex = getLineMap()
-		rowLinesByIndex = getLineMap()
+		colLinesByIndex = getEmptyLineMap(matrix)
+		rowLinesByIndex = getEmptyLineMap(matrix)
 
 		for (const line of lines) {
 			;(line.isColumn ? colLinesByIndex : rowLinesByIndex)[line.index] = true
@@ -84,13 +75,11 @@ export function novel(nodes: Node[], holes: Hole[]): Node[] {
 		debug(`Lines are now:`, lines)
 	}
 
-	if (lines.length > neededLines) {
-		lines.length = neededLines
-	}
-
 	debug(`Final matrix:\n${stringify(matrix, 1)}`)
 
-	const zeros = findBestZeros(matrix)
+	const zeros = findZeros({ matrix, original })
+
+	checkAndCrossZeros(getZeroFrequencies(zeros))
 
 	debug(`Zeros:`, zeros)
 
@@ -110,4 +99,38 @@ export function novel(nodes: Node[], holes: Hole[]): Node[] {
 	return zeros
 		.filter(({ checked }) => checked)
 		.map(({ column, row }) => ({ ...nodes[column], ...holes[row] }))
+}
+
+export function checkAndCrossZeros({
+	colFrequencies,
+	rowFrequencies
+}: {
+	colFrequencies: FrequencyMap
+	rowFrequencies: FrequencyMap
+}) {
+	function getZerosInThreshold(threshold: number) {
+		return [...Object.values(colFrequencies), ...Object.values(rowFrequencies)]
+			.filter(({ frequency }) => frequency <= threshold)
+			.flatMap(({ zeros }) => zeros)
+			.sort((a, b) => a.value - b.value)
+	}
+
+	let threshold = 1
+	let zeros = getZerosInThreshold(threshold)
+
+	while (true) {
+		if (zeros.length === 0) {
+			threshold += 1
+
+			zeros = getZerosInThreshold(threshold)
+
+			if (zeros.length === 0) {
+				break
+			}
+		}
+
+		checkZeros({ colFrequencies, rowFrequencies, zeros })
+
+		zeros = getZerosInThreshold(threshold)
+	}
 }
