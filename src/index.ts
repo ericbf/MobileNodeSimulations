@@ -17,14 +17,14 @@ import {
 } from "./helpers"
 import { novel } from "./algorithms/novel"
 
-export const verbosity: "debug" | "info" | "quiet" = "debug"
-export const shouldRound = true
-export const sensingRange = 1.5
+export const verbosity: "debug" | "info" | "quiet" = "info"
+export const shouldRound = false
+export const sensingRange = 5
 export const sensingConfidence = 0.8
 export const getConfidence = (distance: number) =>
 	-1 / (1 + Math.pow(Math.E, (-(distance - 2 * sensingRange) / 0.7) * sensingRange)) + 1
-export const numberStaticNodes = 3
-export const fieldSize = 3
+export const numberStaticNodes = 28
+export const fieldSize = 50
 
 /** Create a list of nodes with random coordinates. If `howMany` is ≥ the square of `fieldSize`, it won't work, so don't do that. */
 export function randomlyPlaceNodes(howMany = numberStaticNodes): Node[] {
@@ -105,8 +105,18 @@ let novelTotalTotal = 0
 let novelWinTotal = 0
 let novelLoseTotal = 0
 
-for (let i = 0; i < 1000 || hbaWinTotal === 0; i++) {
+const limit = 100
+
+const dots = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+
+for (let i = 0; i < limit; i++) {
 	const { mobileNodes, holes } = placeField()
+
+	if (verbosity === "info") {
+		process.stdout.clearLine(0)
+		process.stdout.cursorTo(0)
+		process.stdout.write(`${dots[i % dots.length]} Working on ${i + 1}/${limit}`)
+	}
 
 	debug(`Number nodes: ${mobileNodes.length}`)
 	debug(`Number holes: ${holes.length}`)
@@ -136,6 +146,11 @@ for (let i = 0; i < 1000 || hbaWinTotal === 0; i++) {
 	}
 }
 
+if (verbosity === "info") {
+	process.stdout.clearLine(0)
+	process.stdout.cursorTo(0)
+}
+
 info(`HBA won ${hbaWin}, tied ${tie}, novel won ${novelWin}.`)
 info(
 	`HBA total was ${hbaTotalTotal.toFixed(1)}, novel total was ${novelTotalTotal.toFixed(
@@ -149,14 +164,14 @@ info(
 )
 info(
 	novelWinTotal > 0
-		? `For its wins, novel was ${((1 - novelWinTotal / hbaLoseTotal) * 100).toFixed(
+		? `When novel won, it was ${((1 - novelWinTotal / hbaLoseTotal) * 100).toFixed(
 				0
 		  )}% better.`
 		: `Novel never won.`
 )
 info(
 	hbaWinTotal > 0
-		? `For its wins, hba was ${((1 - hbaWinTotal / novelLoseTotal) * 100).toFixed(
+		? `When HBA won, it was ${((1 - hbaWinTotal / novelLoseTotal) * 100).toFixed(
 				0
 		  )}% better.`
 		: `HBA never won.`

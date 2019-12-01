@@ -23,6 +23,22 @@ declare global {
 		keys<T, K extends keyof T>(obj: T): K[]
 		values<T, K extends keyof T>(obj: T): T[K][]
 	}
+
+	interface Number {
+		round(places?: number): number
+	}
+}
+
+if (!Number.prototype.round) {
+	Object.defineProperty(Number.prototype, "round", {
+		value(this: number, places = 0) {
+			const factor = Math.pow(10, places)
+			return (
+				Math.round((this > 0 ? this + Number.EPSILON : this - Number.EPSILON) * factor) /
+				factor
+			)
+		}
+	})
 }
 
 if (!Array.prototype.flat) {

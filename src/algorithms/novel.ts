@@ -1,6 +1,6 @@
 import { Node } from "../models/node"
 import { Hole } from "../models/hole"
-import { stringify, debug } from "../helpers"
+import { stringify, debug, withTransposed } from "../helpers"
 import { verbosity } from ".."
 import {
 	createDistanceMatrix,
@@ -10,7 +10,9 @@ import {
 	FrequencyMap,
 	checkZeros,
 	LineMap,
-	getEmptyLineMap
+	getEmptyLineMap,
+	subtractColumns,
+	reduceMatrixWithLines
 } from "./hba"
 
 export function novel(nodes: Node[], holes: Hole[]): Node[] {
@@ -25,55 +27,15 @@ export function novel(nodes: Node[], holes: Hole[]): Node[] {
 
 	debug(`Distance matrix:\n${stringify(matrix, 1)}`)
 
-	let lines = getLines(matrix)
+	// matrix = withTransposed(matrix, subtractColumns)
 
-	debug(`Lines are:`, lines)
+	// debug(`Subtracted row:\n${stringify(matrix, 1)}`)
 
-	let colLinesByIndex: LineMap
-	let rowLinesByIndex: LineMap
+	// matrix = subtractColumns(matrix)
 
-	const neededLines = Math.min(nodes.length, holes.length)
+	// debug(`Subtracted column:\n${stringify(matrix, 1)}`)
 
-	while (lines.length < neededLines) {
-		colLinesByIndex = getEmptyLineMap(matrix)
-		rowLinesByIndex = getEmptyLineMap(matrix)
-
-		for (const line of lines) {
-			;(line.isColumn ? colLinesByIndex : rowLinesByIndex)[line.index] = true
-		}
-
-		let uncoveredMin = Infinity
-
-		for (const [i, column] of matrix.entries()) {
-			for (const [j, value] of column.entries()) {
-				if (!colLinesByIndex[i] && !rowLinesByIndex[j] && value < uncoveredMin) {
-					uncoveredMin = value
-				}
-			}
-		}
-
-		debug(`Uncovered min is ${uncoveredMin}`)
-
-		for (const [column, colLined] of Object.entries(colLinesByIndex)) {
-			const i = parseInt(column, 10)
-
-			for (const [row, rowLined] of Object.entries(rowLinesByIndex)) {
-				const j = parseInt(row, 10)
-
-				if (colLined && rowLined) {
-					matrix[i][j] += uncoveredMin
-				} else if (!colLined && !rowLined) {
-					matrix[i][j] -= uncoveredMin
-				}
-			}
-		}
-
-		debug(`Updated matrix:\n${stringify(matrix)}`)
-
-		lines = getLines(matrix)
-
-		debug(`Lines are now:`, lines)
-	}
+	reduceMatrixWithLines(matrix, nodes, holes)
 
 	debug(`Final matrix:\n${stringify(matrix, 1)}`)
 

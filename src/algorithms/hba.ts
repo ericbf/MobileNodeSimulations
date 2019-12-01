@@ -30,55 +30,7 @@ export function hba(nodes: Node[], holes: Hole[]): Node[] {
 
 	debug(`Subtracted column:\n${stringify(matrix, 1)}`)
 
-	let lines = getLines(matrix)
-
-	debug(`Lines are:`, lines)
-
-	let colLinesByIndex: LineMap
-	let rowLinesByIndex: LineMap
-
-	const neededLines = Math.min(nodes.length, holes.length)
-
-	while (lines.length < neededLines) {
-		colLinesByIndex = getEmptyLineMap(matrix)
-		rowLinesByIndex = getEmptyLineMap(matrix)
-
-		for (const line of lines) {
-			;(line.isColumn ? colLinesByIndex : rowLinesByIndex)[line.index] = true
-		}
-
-		let uncoveredMin = Infinity
-
-		for (const [i, column] of matrix.entries()) {
-			for (const [j, value] of column.entries()) {
-				if (!colLinesByIndex[i] && !rowLinesByIndex[j] && value < uncoveredMin) {
-					uncoveredMin = value
-				}
-			}
-		}
-
-		debug(`Uncovered min is ${uncoveredMin}`)
-
-		for (const [column, colLined] of Object.entries(colLinesByIndex)) {
-			const i = parseInt(column, 10)
-
-			for (const [row, rowLined] of Object.entries(rowLinesByIndex)) {
-				const j = parseInt(row, 10)
-
-				if (colLined && rowLined) {
-					matrix[i][j] += uncoveredMin
-				} else if (!colLined && !rowLined) {
-					matrix[i][j] -= uncoveredMin
-				}
-			}
-		}
-
-		debug(`Updated matrix:\n${stringify(matrix)}`)
-
-		lines = getLines(matrix)
-
-		debug(`Lines are now:`, lines)
-	}
+	reduceMatrixWithLines(matrix, nodes, holes)
 
 	debug(`Final matrix:\n${stringify(matrix, 1)}`)
 
@@ -210,6 +162,60 @@ export function getLines(matrix: number[][]): Line[] {
 	}
 
 	return lines.map((line) => omit(line, "zeros"))
+}
+
+export function reduceMatrixWithLines(matrix: number[][], nodes: Node[], holes: Hole[]) {
+	let lines = getLines(matrix)
+
+	debug(`Lines are:`, lines)
+
+	let colLinesByIndex: LineMap
+	let rowLinesByIndex: LineMap
+
+	const neededLines = Math.min(nodes.length, holes.length)
+
+	while (lines.length < neededLines) {
+		colLinesByIndex = getEmptyLineMap(matrix)
+		rowLinesByIndex = getEmptyLineMap(matrix)
+
+		for (const line of lines) {
+			;(line.isColumn ? colLinesByIndex : rowLinesByIndex)[line.index] = true
+		}
+
+		let uncoveredMin = Infinity
+
+		for (const [i, column] of matrix.entries()) {
+			for (const [j, value] of column.entries()) {
+				if (!colLinesByIndex[i] && !rowLinesByIndex[j] && value < uncoveredMin) {
+					uncoveredMin = value
+				}
+			}
+		}
+
+		debug(`Uncovered min is ${uncoveredMin}`)
+
+		for (const [column, colLined] of Object.entries(colLinesByIndex)) {
+			const i = parseInt(column, 10)
+
+			for (const [row, rowLined] of Object.entries(rowLinesByIndex)) {
+				const j = parseInt(row, 10)
+
+				const value = matrix[i][j]
+
+				if (colLined && rowLined) {
+					matrix[i][j] = (value + uncoveredMin).round(2)
+				} else if (!colLined && !rowLined) {
+					matrix[i][j] = (value - uncoveredMin).round(2)
+				}
+			}
+		}
+
+		debug(`Updated matrix:\n${stringify(matrix)}`)
+
+		lines = getLines(matrix)
+
+		debug(`Lines are now:`, lines)
+	}
 }
 
 export interface Zero {
