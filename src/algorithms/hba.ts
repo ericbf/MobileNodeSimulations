@@ -15,29 +15,23 @@ export function hba(nodes: Node[], holes: Hole[]): Node[] {
 	/**
 	 * The coefficient matrix, `matrix[i][j]`. The `i`s are node index, and the `j`s are the hole index.
 	 */
-	let matrix = [
-		[10, 13, 3, 18, 11],
-		[5, 19, 2, 9, 6],
-		[9, 6, 4, 12, 14],
-		[18, 12, 4, 17, 19],
-		[11, 14, 5, 15, 10]
-	]
+	let matrix = createDistanceMatrix(nodes, holes)
 
 	// The above matrix is the one from the paper, for testing purposes. It looks transposed, but that's because of the way that it works. It's indexed correctly now – matrix[x][y].
 
-	debug(`Distance matrix:\n${stringify(matrix, 0)}`)
+	debug(`Distance matrix:\n${stringify(matrix, 1)}`)
 
 	matrix = withTransposed(matrix, subtractColumns)
 
-	debug(`Subtracted row:\n${stringify(matrix, 0)}`)
+	debug(`Subtracted row:\n${stringify(matrix, 1)}`)
 
 	matrix = subtractColumns(matrix)
 
-	debug(`Subtracted column:\n${stringify(matrix, 0)}`)
+	debug(`Subtracted column:\n${stringify(matrix, 1)}`)
 
 	let lines = getLines(matrix)
 
-	debug(`Initial lines:`, lines)
+	debug(`Lines are:`, lines)
 
 	interface LineMap {
 		[index: number]: boolean
@@ -54,7 +48,9 @@ export function hba(nodes: Node[], holes: Hole[]): Node[] {
 		}, {})
 	}
 
-	while (lines.length < matrix.length) {
+	const neededLines = Math.min(nodes.length, holes.length)
+
+	while (lines.length < neededLines) {
 		colLinesByIndex = getLineMap()
 		rowLinesByIndex = getLineMap()
 
@@ -88,14 +84,22 @@ export function hba(nodes: Node[], holes: Hole[]): Node[] {
 			}
 		}
 
+		debug(`Updated matrix:\n${stringify(matrix)}`)
+
 		lines = getLines(matrix)
+
+		debug(`Lines are now:`, lines)
 	}
 
-	debug(`Final matrix:\n${stringify(matrix, 0)}`)
+	if (lines.length > neededLines) {
+		lines.length = neededLines
+	}
+
+	debug(`Final matrix:\n${stringify(matrix, 1)}`)
 
 	const zeros = findBestZeros(matrix)
 
-	debug(`Best zeros:`, zeros)
+	debug(`Zeros:`, zeros)
 
 	if (verbosity === "debug") {
 		// Fill the matrix with zeros
@@ -107,7 +111,7 @@ export function hba(nodes: Node[], holes: Hole[]): Node[] {
 			.forEach(({ column, row }) => (matrix[column][row] = 1))
 
 		// Result
-		debug(`Result:\n${stringify(matrix, 0)}`)
+		debug(`Result:\n${stringify(matrix, 1)}`)
 	}
 
 	return zeros
@@ -129,11 +133,20 @@ export function createDistanceMatrix(nodes: Node[], holes: Hole[]) {
 	)
 }
 
-/** Return a matrix where every value in each column is reduced by the lowest value in that column. */
+/**
+ * Return a matrix where every value in each column is reduced by the lowest value in that column.
+ * @param matrix The matrix to reduce each column by the min of that column.
+ */
 export function subtractColumns(matrix: number[][]) {
 	matrix = matrix.map((col) => col.slice(0))
 
 	for (const column of matrix) {
+		const eligible = column.filter(isFinite)
+
+		if (eligible.length < 2) {
+			continue
+		}
+
 		const min = Math.min(...column.filter(isFinite))
 
 		for (const [index, value] of column.entries()) {
@@ -155,7 +168,7 @@ interface Line {
  * Get the minimal number of lines to cover all the zeros. Do this by selecting the lines that cover the most uncovered zeros in turn until there are no uncovered zeros.
  * @param matrix The matrix wherein to find the least lines.
  */
-function getLines(matrix: number[][]): Line[] {
+export function getLines(matrix: number[][]): Line[] {
 	interface MaybeLine extends Line {
 		/** The index of the zeros in this line. */
 		zeros: number[]
@@ -200,7 +213,7 @@ function getLines(matrix: number[][]): Line[] {
 	return lines.map((line) => omit(line, "zeros"))
 }
 
-function findBestZeros(matrix: number[][]) {
+export function findBestZeros(matrix: number[][]) {
 	const zeros = matrix
 		.map(getIndicesOfZeros)
 		.map((zeros: number[], column: number) =>
@@ -229,8 +242,11 @@ function findBestZeros(matrix: number[][]) {
 	const rowFrequencies: FrequencyMap = {}
 
 	for (const zero of zeros) {
-		if (!colFrequencies[zero.column]) {
-			colFrequencies[zero.column] = {
+		let col = colFrequencies[zero.column]
+		let row = rowFrequencies[zero.row]
+
+		if (!col) {
+			colFrequencies[zero.column] = col = {
 				isColumn: true,
 				index: zero.column,
 				frequency: 0,
@@ -238,11 +254,8 @@ function findBestZeros(matrix: number[][]) {
 			}
 		}
 
-		colFrequencies[zero.column].frequency += 1
-		colFrequencies[zero.column].zeros.push(zero)
-
-		if (!rowFrequencies[zero.row]) {
-			rowFrequencies[zero.row] = {
+		if (!row) {
+			rowFrequencies[zero.row] = row = {
 				isColumn: false,
 				index: zero.row,
 				frequency: 0,
@@ -250,8 +263,11 @@ function findBestZeros(matrix: number[][]) {
 			}
 		}
 
-		rowFrequencies[zero.row].frequency += 1
-		rowFrequencies[zero.row].zeros.push(zero)
+		col.frequency += 1
+		col.zeros.push(zero)
+
+		row.frequency += 1
+		row.zeros.push(zero)
 	}
 
 	function checkZeros(
@@ -261,25 +277,34 @@ function findBestZeros(matrix: number[][]) {
 		sKey: "column" | "row",
 		threshold: number
 	) {
-		for (const { frequency, zeros } of Object.values(primary)) {
-			if (frequency === threshold) {
+		for (const [indexAsString, { frequency, zeros }] of Object.entries(primary)) {
+			const index = parseInt(indexAsString, 10)
+
+			if (frequency <= threshold) {
 				const zero = zeros.random
 
-				zero.checked = true
+				if (zero) {
+					zero.checked = true
 
-				secondary[zero[sKey]].zeros.forEach((zero) => {
-					if (!zero.checked) {
-						zero.crossed = true
+					secondary[zero[sKey]].zeros.forEach((zero) => {
+						if (!zero.checked) {
+							zero.crossed = true
 
-						const frequency = primary[zero[pKey]]
+							const frequency = primary[zero[pKey]]
 
-						frequency.frequency -= 1
-						frequency.zeros.remove(zero)
-					}
-				})
+							if (frequency) {
+								frequency.frequency -= 1
+								frequency.zeros.remove(zero)
+							} else {
+								debug("Would have failed")
+							}
+						}
+					})
 
-				delete primary[zero[pKey]]
-				delete secondary[zero[sKey]]
+					delete secondary[zero[sKey]]
+				}
+
+				delete primary[index]
 			}
 		}
 	}
@@ -306,7 +331,7 @@ function findBestZeros(matrix: number[][]) {
 	return zeros
 }
 
-function getIndicesOfZeros(column: number[]) {
+export function getIndicesOfZeros(column: number[]) {
 	return column
 		.map((value, index) => ({ value, index }))
 		.filter(({ value }) => value === 0)
