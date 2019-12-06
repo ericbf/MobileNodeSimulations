@@ -15,6 +15,12 @@ export function tba(nodes: Node[], holes: Hole[]): Node[] {
 	 * The coefficient matrix, `matrix[i][j]`. The `i`s are node index, and the `j`s are the hole index.
 	 */
 	let matrix = createDistanceMatrix(nodes, holes)
+
+	const original = matrix
+
+	// The above matrix is the one from the paper, for testing purposes. It looks transposed, but that's because of the way that it works. It's indexed correctly now – matrix[x][y].
+
+	debug(`Distance matrix:\n${stringify(matrix, 1)}`)
 }
 
 /** Create a square distance matrix with each column is the distance from a node to each hole. If the number of nodes isn't equal the number of holes, fill the array with `NaN` to make it square. */
