@@ -16,29 +16,180 @@ import {
 	debug
 } from "./helpers"
 import { novel } from "./algorithms/novel"
+import { Hole } from "./models/hole"
 
-export const verbosity: "debug" | "info" | "quiet" = "info"
-export const shouldRound = false
+export const verbosity: "debug" | "info" | "quiet" = "info" as "debug" | "info" | "quiet"
+export const shouldRound = true
 export const sensingRange = 5
 export const sensingConfidence = 0.8
 export const getConfidence = (distance: number) =>
 	-1 / (1 + Math.pow(Math.E, (-(distance - 2 * sensingRange) / 0.7) * sensingRange)) + 1
 export const numberStaticNodes = 28
 export const fieldSize = 50
+const trials = 100
+
+// debug(`Matrix:\n${stringify(matrices[0])}`)
+
+// let start = performance.now()
+
+// const greedyResults = matrices.map(greedyLines)
+
+// debug(`Greedy took ${performance.now() - start}`)
+
+// start = performance.now()
+
+// const wikiResults = matrices.map(wikiLines)
+
+// debug(`Wiki took ${performance.now() - start}`)
+
+// for (const [i, greedyResult] of greedyResults.entries()) {
+// 	if (greedyResult.length !== wikiResults[i].length) {
+// 		debug(
+// 			`Greedy (${greedyResult.length}):`,
+// 			greedyResult,
+// 			`; wiki (${wikiResults[i].length}):`,
+// 			wikiResults[i],
+// 			`; matrix:\n${stringify(matrices[i])}`
+// 		)
+// 	}
+// }
+
+let tie = 0
+
+class Stats {
+	wins = 0
+	total = 0
+	winTotal = 0
+	loseTotal = 0
+}
+
+const hbaStats = new Stats()
+const novelStats = new Stats()
+
+const dots = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+
+for (let i = 0; i < trials; i++) {
+	const { mobileNodes, holes, distanceMatrix } = placeField()
+
+	if (verbosity === "info") {
+		process.stdout.cursorTo && process.stdout.cursorTo(0)
+		process.stdout.write(`${dots[i % dots.length]} Working on ${i + 1}/${trials}`)
+	}
+
+	debug(`Number nodes: ${mobileNodes.length}`)
+	debug(`Number holes: ${holes.length}`)
+
+	const hbaTotal = getTotal(mobileNodes, holes, distanceMatrix, hba(distanceMatrix))
+
+	hbaStats.total += hbaTotal
+
+	const novelTotal = getTotal(mobileNodes, holes, distanceMatrix, novel(distanceMatrix))
+
+	novelStats.total += novelTotal
+
+	if (hbaTotal < novelTotal) {
+		hbaStats.wins += 1
+
+		hbaStats.winTotal += hbaTotal
+		novelStats.loseTotal += novelTotal
+	} else if (hbaTotal === novelTotal) {
+		tie += 1
+	} else {
+		novelStats.wins += 1
+
+		hbaStats.loseTotal += hbaTotal
+		novelStats.winTotal += novelTotal
+	}
+}
+
+if (verbosity === "info") {
+	process.stdout.cursorTo && process.stdout.cursorTo(0)
+}
+
+info(`HBA won ${hbaStats.wins}, tied ${tie}, novel won ${novelStats.wins}.`)
+info(
+	`HBA total was ${hbaStats.total.toFixed(1)}, novel total was ${novelStats.total.toFixed(
+		1
+	)}.`
+)
+info(
+	`On average, novel was ${((1 - novelStats.total / hbaStats.total) * 100).toFixed(
+		0
+	)}% better.`
+)
+info(
+	novelStats.winTotal > 0
+		? `When novel won, it was ${(
+				(1 - novelStats.winTotal / hbaStats.loseTotal) *
+				100
+		  ).toFixed(0)}% better.`
+		: `Novel never won.`
+)
+info(
+	hbaStats.winTotal > 0
+		? `When HBA won, it was ${(
+				(1 - hbaStats.winTotal / novelStats.loseTotal) *
+				100
+		  ).toFixed(0)}% better.`
+		: `HBA never won.`
+)
+
+function getTotal(
+	nodes: Node[],
+	holes: Hole[],
+	distanceMatrix: number[][],
+	dispatch: number[][]
+) {
+	return nodes
+		.map((_, column) => {
+			const row = dispatch[column].slice(0, holes.length).findIndex((n) => n > 0)
+
+			return row >= 0 ? distanceMatrix[column][row] * dispatch[column][row] : 0
+		})
+		.reduce((trans, value) => trans + value)
+}
+
+/** Create a square distance matrix with each column is the distance from a node to each hole. If the number of nodes isn't equal the number of holes, fill the array with `NaN` to make it square. */
+export function createDistanceMatrix(nodes: Node[], holes: Hole[]) {
+	const size = Math.max(nodes.length, holes.length)
+
+	const matrix = Array.from({ length: size }).map((_, i) =>
+		Array.from({ length: size }).map((_, j) => {
+			const node = nodes[i]
+			const hole = holes[j]
+
+			return !node || !hole ? NaN : distanceBetween(node, hole).round(shouldRound ? 0 : 3)
+		})
+	)
+
+	const max = Math.max(...matrix.flat(1).filter(isFinite))
+
+	for (const column of matrix) {
+		for (const [index, value] of column.entries()) {
+			if (!isFinite(value)) {
+				column[index] = max
+			}
+		}
+	}
+
+	return matrix
+}
 
 /** Create a list of nodes with random coordinates. If `howMany` is ≥ the square of `fieldSize`, it won't work, so don't do that. */
-export function randomlyPlaceNodes(howMany = numberStaticNodes): Node[] {
+function randomlyPlaceNodes(howMany = numberStaticNodes): Node[] {
 	function make(_: any, id: number) {
-		return round({
+		return {
 			id,
 			x: Math.random() * fieldSize,
 			y: Math.random() * fieldSize
-		})
+		}
 	}
 
 	// Let's ensure there are no two nodes that are overlapping each other.
 
-	let nodes = Array.from({ length: howMany }).map(make)
+	let nodes = Array.from({ length: howMany })
+		.map(make)
+		.map(round)
 
 	let containedDuplicates: boolean
 
@@ -68,7 +219,7 @@ function placeField() {
 	const delaunay = Delaunay.from(staticNodes.map(toCartesian))
 	const voronoi = delaunay.voronoi([0, 0, fieldSize, fieldSize])
 
-	const holes = Array.from(voronoi.cellPolygons())
+	const holes: Hole[] = Array.from(voronoi.cellPolygons())
 		.flat()
 		.map(toCoordinate)
 		.map(round)
@@ -86,105 +237,14 @@ function placeField() {
 
 			return closest.distance > sensingRange
 		})
-		.map((pos) => ({ ...pos, confidence: 0 }))
+		.map((pos) => ({ ...pos }))
 
 	const mobileNodes = randomlyPlaceNodes()
 
-	return { staticNodes, mobileNodes, holes }
+	const distanceMatrix = createDistanceMatrix(mobileNodes, holes)
+
+	return { staticNodes, mobileNodes, holes, distanceMatrix }
 }
-
-let hbaWin = 0
-let hbaTotalTotal = 0
-let hbaWinTotal = 0
-let hbaLoseTotal = 0
-
-let tie = 0
-
-let novelWin = 0
-let novelTotalTotal = 0
-let novelWinTotal = 0
-let novelLoseTotal = 0
-
-const limit = 100
-
-const dots = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
-
-for (let i = 0; i < limit; i++) {
-	const { mobileNodes, holes } = placeField()
-
-	if (verbosity === "info") {
-		process.stdout.clearLine(0)
-		process.stdout.cursorTo(0)
-		process.stdout.write(`${dots[i % dots.length]} Working on ${i + 1}/${limit}`)
-	}
-
-	debug(`Number nodes: ${mobileNodes.length}`)
-	debug(`Number holes: ${holes.length}`)
-
-	const hbaDispatch = hba(mobileNodes, holes)
-	const hbaTotal = getTotal(mobileNodes, hbaDispatch)
-
-	hbaTotalTotal += hbaTotal
-
-	const novelDispatch = novel(mobileNodes, holes)
-	const novelTotal = getTotal(mobileNodes, novelDispatch)
-
-	novelTotalTotal += novelTotal
-
-	if (hbaTotal < novelTotal) {
-		hbaWin += 1
-
-		hbaWinTotal += hbaTotal
-		novelLoseTotal += novelTotal
-	} else if (hbaTotal === novelTotal) {
-		tie += 1
-	} else {
-		novelWin += 1
-
-		hbaLoseTotal += hbaTotal
-		novelWinTotal += novelTotal
-	}
-}
-
-if (verbosity === "info") {
-	process.stdout.clearLine(0)
-	process.stdout.cursorTo(0)
-}
-
-info(`HBA won ${hbaWin}, tied ${tie}, novel won ${novelWin}.`)
-info(
-	`HBA total was ${hbaTotalTotal.toFixed(1)}, novel total was ${novelTotalTotal.toFixed(
-		1
-	)}.`
-)
-info(
-	`On average, novel was ${((1 - novelTotalTotal / hbaTotalTotal) * 100).toFixed(
-		0
-	)}% better.`
-)
-info(
-	novelWinTotal > 0
-		? `When novel won, it was ${((1 - novelWinTotal / hbaLoseTotal) * 100).toFixed(
-				0
-		  )}% better.`
-		: `Novel never won.`
-)
-info(
-	hbaWinTotal > 0
-		? `When HBA won, it was ${((1 - hbaWinTotal / novelLoseTotal) * 100).toFixed(
-				0
-		  )}% better.`
-		: `HBA never won.`
-)
-
-function getTotal(start: Node[], end: Node[]) {
-	return start.reduce((total, node) => {
-		const ending = end.find(({ id }) => id === node.id)
-
-		return total + (ending ? distanceBetween(ending, node) : 0)
-	}, 0)
-}
-// info(hba([], []))
 
 // const holeDelauney = Delaunay.from(holes.map(toCartesian))
 // const svg = `

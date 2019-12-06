@@ -1,75 +1,50 @@
-import { Node } from "../models/node"
-import { Hole } from "../models/hole"
-import {
-	distanceBetween,
-	stringify,
-	withTransposed,
-	transposed,
-	omit,
-	debug
-} from "../helpers"
+import { stringify, withTransposed, debug } from "../helpers"
 import { verbosity } from ".."
+import { minimumLines } from "./minimum-lines"
 
-export function hba(nodes: Node[], holes: Hole[]): Node[] {
-	/**
-	 * The coefficient matrix, `matrix[i][j]`. The `i`s are node index, and the `j`s are the hole index.
-	 */
-	let matrix = createDistanceMatrix(nodes, holes)
+/**
+ *
+ * @param nodes The mobile nodes that are available
+ * @param holes The holes present in the FOI
+ * @param matrix The coefficient matrix, `matrix[i][j]` – The `i`s are node index, and the `j`s are the hole index
+ */
+export function hba(matrix: number[][]) {
+	let modified = matrix
 
-	const original = matrix
+	debug(`Distance matrix:\n${stringify(modified)}`)
 
-	// The above matrix is the one from the paper, for testing purposes. It looks transposed, but that's because of the way that it works. It's indexed correctly now – matrix[x][y].
+	modified = withTransposed(modified, subtractColumns)
 
-	debug(`Distance matrix:\n${stringify(matrix, 1)}`)
+	debug(`Subtracted row:\n${stringify(modified)}`)
 
-	matrix = withTransposed(matrix, subtractColumns)
+	modified = subtractColumns(modified)
 
-	debug(`Subtracted row:\n${stringify(matrix, 1)}`)
+	debug(`Subtracted column:\n${stringify(modified)}`)
 
-	matrix = subtractColumns(matrix)
+	reduceMatrixWithLines(modified)
 
-	debug(`Subtracted column:\n${stringify(matrix, 1)}`)
+	debug(`Final matrix:\n${stringify(modified)}`)
 
-	reduceMatrixWithLines(matrix, nodes, holes)
+	const zeros = findZeros({ matrix: modified, original: matrix })
 
-	debug(`Final matrix:\n${stringify(matrix, 1)}`)
-
-	const zeros = findZeros({ matrix, original })
-
-	checkAndCrossZeros(getZeroFrequencies(zeros))
+	checkAndCrossZeros({ ...getZeroFrequencies(zeros), maxThreshold: modified.length })
 
 	debug(`Zeros:`, zeros)
 
 	if (verbosity === "debug") {
 		// Fill the matrix with zeros
-		matrix = matrix.map((column) => column.map(() => 0))
+		modified = modified.map((column) => column.map(() => 0))
 
 		// Put 1s in the result spots
 		zeros
 			.filter(({ checked }) => checked)
-			.forEach(({ column, row }) => (matrix[column][row] = 1))
+			.forEach(({ column, row }) => (modified[column][row] = 1))
 
 		// Result
-		debug(`Result:\n${stringify(matrix, 1)}`)
+		debug(`Result:\n${stringify(modified)}`)
 	}
 
-	return zeros
-		.filter(({ checked }) => checked)
-		.map(({ column, row }) => ({ ...nodes[column], ...holes[row] }))
-}
-
-/** Create a square distance matrix with each column is the distance from a node to each hole. If the number of nodes isn't equal the number of holes, fill the array with `NaN` to make it square. */
-export function createDistanceMatrix(nodes: Node[], holes: Hole[]) {
-	const size = Math.max(nodes.length, holes.length)
-
-	return Array.from({ length: size }).map((_, i) =>
-		Array.from({ length: size }).map((_, j) => {
-			const node = nodes[i]
-			const hole = holes[j]
-
-			return !node || !hole ? NaN : distanceBetween(node, hole)
-		})
-	)
+	return modified
 }
 
 /**
@@ -115,71 +90,22 @@ export function getEmptyLineMap(matrix: number[][]) {
 	}, {})
 }
 
-/**
- * Get the minimal number of lines to cover all the zeros. Do this by selecting the lines that cover the most uncovered zeros in turn until there are no uncovered zeros.
- * @param matrix The matrix wherein to find the least lines.
- */
-export function getLines(matrix: number[][]): Line[] {
-	interface MaybeLine extends Line {
-		/** The index of the zeros in this line. */
-		zeros: number[]
-	}
-
-	const inColumns: MaybeLine[] = matrix
-		.map((column, index) => ({
-			isColumn: true,
-			index,
-			zeros: getIndicesOfZeros(column)
-		}))
-		.filter(({ zeros }) => zeros.length > 0)
-
-	const inRows: MaybeLine[] = transposed(matrix)
-		.map((row, index) => ({
-			isColumn: false,
-			index,
-			zeros: getIndicesOfZeros(row)
-		}))
-		.filter(({ zeros }) => zeros.length > 0)
-
-	const lines: MaybeLine[] = []
-
-	let allLines = [...inColumns, ...inRows].sort(lineSorter)
-
-	while (allLines.length > 0) {
-		const next = allLines.shift()!
-
-		lines.push(next)
-
-		allLines
-			.filter(({ isColumn: column }) => column !== next.isColumn)
-			.forEach(({ zeros }) => zeros.remove(next.index))
-
-		allLines = allLines.filter(({ zeros }) => zeros.length > 0).sort(lineSorter)
-	}
-
-	function lineSorter(a: MaybeLine, b: MaybeLine) {
-		return b.zeros.length - a.zeros.length
-	}
-
-	return lines.map((line) => omit(line, "zeros"))
-}
-
-export function reduceMatrixWithLines(matrix: number[][], nodes: Node[], holes: Hole[]) {
-	let lines = getLines(matrix)
+export function reduceMatrixWithLines(matrix: number[][]) {
+	let lines = minimumLines(matrix)
 
 	debug(`Lines are:`, lines)
 
 	let colLinesByIndex: LineMap
 	let rowLinesByIndex: LineMap
 
-	const neededLines = Math.min(nodes.length, holes.length)
-
-	while (lines.length < neededLines) {
+	while (lines.length < matrix.length) {
 		colLinesByIndex = getEmptyLineMap(matrix)
 		rowLinesByIndex = getEmptyLineMap(matrix)
 
 		for (const line of lines) {
-			;(line.isColumn ? colLinesByIndex : rowLinesByIndex)[line.index] = true
+			const list = line.isColumn ? colLinesByIndex : rowLinesByIndex
+
+			list[line.index] = true
 		}
 
 		let uncoveredMin = Infinity
@@ -203,16 +129,16 @@ export function reduceMatrixWithLines(matrix: number[][], nodes: Node[], holes: 
 				const value = matrix[i][j]
 
 				if (colLined && rowLined) {
-					matrix[i][j] = (value + uncoveredMin).round(2)
+					matrix[i][j] = (value + uncoveredMin).round(3)
 				} else if (!colLined && !rowLined) {
-					matrix[i][j] = (value - uncoveredMin).round(2)
+					matrix[i][j] = (value - uncoveredMin).round(3)
 				}
 			}
 		}
 
 		debug(`Updated matrix:\n${stringify(matrix)}`)
 
-		lines = getLines(matrix)
+		lines = minimumLines(matrix)
 
 		debug(`Lines are now:`, lines)
 	}
@@ -247,8 +173,8 @@ export function findZeros({
 		.flat()
 }
 
-export function getIndicesOfZeros(column: number[]) {
-	return column
+export function getIndicesOfZeros(set: number[]) {
+	return set
 		.map((value, index) => ({ value, index }))
 		.filter(({ value }) => value === 0)
 		.map(({ index }) => index)
@@ -303,10 +229,12 @@ export function getZeroFrequencies(zeros: Zero[]) {
 
 function checkAndCrossZeros({
 	colFrequencies,
-	rowFrequencies
+	rowFrequencies,
+	maxThreshold
 }: {
 	colFrequencies: FrequencyMap
 	rowFrequencies: FrequencyMap
+	maxThreshold: number
 }) {
 	function doCheckFor(map: FrequencyMap, threshold: number) {
 		Object.values(map)
@@ -326,19 +254,30 @@ function checkAndCrossZeros({
 		return index >= 0
 	}
 
-	function isEmpty(map: FrequencyMap) {
+	function isItEmpty(map: FrequencyMap) {
 		return Object.values(map).length === 0
 	}
 
 	let threshold = 1
+	let moreZerosAtThisThreshold =
+		hasWithin(colFrequencies, threshold) || hasWithin(rowFrequencies, threshold)
+	let isEmpty = isItEmpty(colFrequencies) && isItEmpty(rowFrequencies)
 
-	while (
-		hasWithin(colFrequencies, threshold) ||
-		hasWithin(rowFrequencies, threshold) ||
-		((!isEmpty(colFrequencies) || !isEmpty(rowFrequencies)) && threshold++)
-	) {
-		doCheckFor(colFrequencies, threshold)
-		doCheckFor(rowFrequencies, threshold)
+	while (moreZerosAtThisThreshold || !isEmpty) {
+		if (!moreZerosAtThisThreshold) {
+			if (threshold < maxThreshold) {
+				threshold++
+			} else {
+				break
+			}
+		} else {
+			doCheckFor(colFrequencies, threshold)
+			doCheckFor(rowFrequencies, threshold)
+			isEmpty = isItEmpty(colFrequencies) && isItEmpty(rowFrequencies)
+		}
+
+		moreZerosAtThisThreshold =
+			hasWithin(colFrequencies, threshold) || hasWithin(rowFrequencies, threshold)
 	}
 }
 

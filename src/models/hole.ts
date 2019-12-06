@@ -1,5 +1,3 @@
 import { Coordinate } from "./position"
 
-export interface Hole extends Coordinate {
-	confidence: number
-}
+export interface Hole extends Coordinate {}

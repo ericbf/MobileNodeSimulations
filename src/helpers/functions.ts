@@ -53,15 +53,17 @@ export function byPosition(lhs: Position, rhs: Position) {
  */
 export function round<T extends Position>(pos: T): T
 export function round(pos: Position) {
-	return shouldRound
-		? Array.isArray(pos)
-			? pos.map(Math.round)
-			: {
-					...pos,
-					x: Math.round(pos.x),
-					y: Math.round(pos.y)
-			  }
-		: pos
+	return Array.isArray(pos)
+		? pos.map(rounder(shouldRound ? 0 : 3))
+		: {
+				...pos,
+				x: pos.x.round(shouldRound ? 0 : 3),
+				y: pos.y.round(shouldRound ? 0 : 3)
+		  }
+}
+
+function rounder(places: number) {
+	return (value: number) => value.round(places)
 }
 
 /**
@@ -89,7 +91,7 @@ export function isUnique(pos: Position, i: number, arr: Position[]) {
  * Get a transposed version of the passed matrix.
  * @param matrix The matrix to transpose.
  */
-export function transposed(matrix: number[][]) {
+export function transposed<T>(matrix: T[][]) {
 	return matrix.map((_, i) => matrix.map((row) => row[i]))
 }
 
@@ -109,10 +111,10 @@ export function withTransposed(
  * Get a better representation of the passed matrix, that is, get columns and rows showing with the right orientation.
  * @param matrix The matrix to stringify.
  */
-export function stringify(matrix: number[][], precision = 1) {
+export function stringify(matrix: number[][]) {
 	return transposed(matrix)
 		.map((column) => {
-			return column.map((value) => `${value.toFixed(precision)}`).join(`\t`)
+			return column.map((value) => `${value.toFixed(shouldRound ? 0 : 3)}`).join(`\t`)
 		})
 		.join(`\n`)
 }

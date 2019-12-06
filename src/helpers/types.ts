@@ -7,3 +7,5 @@ export type Unbox<T> = T extends (infer U)[]
 	: T extends Promise<infer U>
 	? U
 	: T
+
+export type ValueOrFunction<T> = T | (() => T)

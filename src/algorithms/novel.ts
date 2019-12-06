@@ -1,74 +1,69 @@
-import { Node } from "../models/node"
-import { Hole } from "../models/hole"
 import { stringify, debug, withTransposed } from "../helpers"
 import { verbosity } from ".."
 import {
-	createDistanceMatrix,
-	getLines,
 	findZeros,
 	getZeroFrequencies,
 	FrequencyMap,
 	checkZeros,
-	LineMap,
-	getEmptyLineMap,
-	subtractColumns,
-	reduceMatrixWithLines
+	reduceMatrixWithLines,
+	subtractColumns
 } from "./hba"
 
-export function novel(nodes: Node[], holes: Hole[]): Node[] {
-	/**
-	 * The coefficient matrix, `matrix[i][j]`. The `i`s are node index, and the `j`s are the hole index.
-	 */
-	let matrix = createDistanceMatrix(nodes, holes)
-
-	const original = matrix.map((col) => col.slice(0))
+/**
+ *
+ * @param nodes The mobile nodes that are available
+ * @param holes The holes present in the FOI
+ * @param matrix The coefficient matrix, `matrix[i][j]` – The `i`s are node index, and the `j`s are the hole index
+ */
+export function novel(matrix: number[][]) {
+	let modified = matrix.map((col) => col.slice(0))
 
 	// The above matrix is the one from the paper, for testing purposes. It looks transposed, but that's because of the way that it works. It's indexed correctly now – matrix[x][y].
 
-	debug(`Distance matrix:\n${stringify(matrix, 1)}`)
+	debug(`Distance matrix:\n${stringify(modified)}`)
 
-	// matrix = withTransposed(matrix, subtractColumns)
+	modified = withTransposed(modified, subtractColumns)
 
-	// debug(`Subtracted row:\n${stringify(matrix, 1)}`)
+	debug(`Subtracted row:\n${stringify(modified)}`)
 
-	// matrix = subtractColumns(matrix)
+	modified = subtractColumns(modified)
 
-	// debug(`Subtracted column:\n${stringify(matrix, 1)}`)
+	debug(`Subtracted column:\n${stringify(modified)}`)
 
-	reduceMatrixWithLines(matrix, nodes, holes)
+	reduceMatrixWithLines(modified)
 
-	debug(`Final matrix:\n${stringify(matrix, 1)}`)
+	debug(`Final matrix:\n${stringify(modified)}`)
 
-	const zeros = findZeros({ matrix, original })
+	const zeros = findZeros({ matrix: modified, original: matrix })
 
-	checkAndCrossZeros(getZeroFrequencies(zeros))
+	checkAndCrossZeros({ ...getZeroFrequencies(zeros), maxThreshold: modified.length })
 
 	debug(`Zeros:`, zeros)
 
 	if (verbosity === "debug") {
 		// Fill the matrix with zeros
-		matrix = matrix.map((column) => column.map(() => 0))
+		modified = modified.map((column) => column.map(() => 0))
 
 		// Put 1s in the result spots
 		zeros
 			.filter(({ checked }) => checked)
-			.forEach(({ column, row }) => (matrix[column][row] = 1))
+			.forEach(({ column, row }) => (modified[column][row] = 1))
 
 		// Result
-		debug(`Result:\n${stringify(matrix, 1)}`)
+		debug(`Result:\n${stringify(modified)}`)
 	}
 
-	return zeros
-		.filter(({ checked }) => checked)
-		.map(({ column, row }) => ({ ...nodes[column], ...holes[row] }))
+	return modified
 }
 
 export function checkAndCrossZeros({
 	colFrequencies,
-	rowFrequencies
+	rowFrequencies,
+	maxThreshold
 }: {
 	colFrequencies: FrequencyMap
 	rowFrequencies: FrequencyMap
+	maxThreshold: number
 }) {
 	function getZerosInThreshold(threshold: number) {
 		return [...Object.values(colFrequencies), ...Object.values(rowFrequencies)]
@@ -86,7 +81,7 @@ export function checkAndCrossZeros({
 
 			zeros = getZerosInThreshold(threshold)
 
-			if (zeros.length === 0) {
+			if (zeros.length === 0 && threshold === maxThreshold) {
 				break
 			}
 		}
