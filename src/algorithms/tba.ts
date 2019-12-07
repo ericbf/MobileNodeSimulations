@@ -1,30 +1,21 @@
 import { Node } from "../models/node"
 import { Hole } from "../models/hole"
-import {
-	distanceBetween,
-	stringify,
-	withTransposed,
-	transposed,
-	omit,
-	debug
-} from "../helpers"
+import { distanceBetween, stringify, transposed, omit, debug } from "../helpers"
 import { verbosity, numberStaticNodes } from ".."
 import { reduceMatrixWithLines } from "./hba"
 
-tba()
-
-export function tba() {
+export function tba(nodes: Node[], holes: Hole[]) {
 	/**
 	 * The coefficient matrix, `matrix[i][j]`. The `i`s are node index, and the `j`s are the hole index.
 	 */
-	//let matrix = createDistanceMatrix(nodes, holes)
+	let matrix = createDistanceMatrix(nodes, holes)
 
 	//for testing
-	let matrix = [
-		[1, 2, 3],
-		[2, 4, 3],
-		[4, 1, 2]
-	]
+	// let matrix = [
+	// 	[1, 2, 3],
+	// 	[2, 4, 3],
+	// 	[4, 1, 2]
+	// ]
 
 	const original = matrix
 
@@ -58,7 +49,92 @@ export function tba() {
 		debug(`lines: `, testLines)
 	}
 
-	while (stillZeros(positionMatrix)) {}
+	let zRowCol = allTheSingleZeros(positionMatrix)
+
+	while (stillZeros(positionMatrix)) {
+		adjustPositionMatrix(zRowCol, positionMatrix)
+		zRowCol = allTheSingleZeros(positionMatrix)
+	}
+
+	positionMatrix = convertToOhWon(positionMatrix)
+
+	debug(`Position matrix:\n${stringify(positionMatrix, 1)}`)
+
+	return positionMatrix
+}
+
+export function convertToOhWon(position: number[][]) {
+	for (let i = 0; i < position.length; i++) {
+		for (let j = 0; j < position.length; j++) {
+			position[i][j] -= 1
+		}
+	}
+
+	return position
+}
+
+export function adjustPositionMatrix(zRowCol: number[], position: number[][]) {
+	if (zRowCol.length === 3) {
+		for (let col = 0; col < position.length; col++) {
+			for (let row = 0; row < position.length; row++) {
+				if (position[col][row] === 0) {
+					for (let m = 0; m < position.length; m++) {
+						position[col][m] = 1
+					}
+					for (let n = 0; n < position.length; n++) {
+						position[n][row] = 1
+					}
+					position[col][row] = 2
+				}
+			}
+		}
+	} else if (zRowCol.length === 2) {
+		let col = zRowCol[0]
+		let row = zRowCol[1]
+		for (let m = 0; m < position.length; m++) {
+			position[col][m] = 1
+		}
+		for (let n = 0; n < position.length; n++) {
+			position[n][row] = 1
+		}
+		position[col][row] = 2
+	}
+
+	return position
+}
+
+export function allTheSingleZeros(position: number[][]) {
+	let colTracker = -1
+	let rowTracker = -1
+	for (let i = 0; i < position.length; i++) {
+		let zeroCounter = 0
+		for (let j = 0; j < position.length; j++) {
+			if (position[i][j] === 0) {
+				colTracker = i
+				rowTracker = j
+				zeroCounter++
+			}
+			if (zeroCounter === 1 && j === position.length - 1) {
+				return [colTracker, rowTracker]
+			}
+		}
+	}
+
+	for (let i = 0; i < position.length; i++) {
+		let zeroCounter = 0
+		for (let j = 0; j < position.length; j++) {
+			if (position[j][i] === 0) {
+				colTracker = j
+				rowTracker = i
+				zeroCounter++
+			}
+			if (zeroCounter === 1 && j == position.length - 1) {
+				return [colTracker, rowTracker]
+			}
+		}
+	}
+
+	return [0, 0, 0]
 }
 
 export function stillZeros(position: number[][]) {
