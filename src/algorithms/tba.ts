@@ -57,6 +57,20 @@ export function tba() {
 		testLines = getLines(positionMatrix)
 		debug(`lines: `, testLines)
 	}
+
+	while (stillZeros(positionMatrix)) {}
+}
+
+export function stillZeros(position: number[][]) {
+	let zeroBeHereOh = false
+	for (let i = 0; i < position.length; i++) {
+		for (let j = 0; j < position.length; j++) {
+			if (position[i][j] === 0) {
+				zeroBeHereOh = true
+			}
+		}
+	}
+	return zeroBeHereOh
 }
 
 /** Create a square distance matrix with each column is the distance from a node to each hole. If the number of nodes isn't equal the number of holes, fill the array with `NaN` to make it square. */
