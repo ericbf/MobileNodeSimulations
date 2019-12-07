@@ -1,30 +1,21 @@
 import { Node } from "../models/node"
 import { Hole } from "../models/hole"
-import {
-	distanceBetween,
-	stringify,
-	withTransposed,
-	transposed,
-	omit,
-	debug
-} from "../helpers"
+import { distanceBetween, stringify, transposed, omit, debug } from "../helpers"
 import { verbosity, numberStaticNodes } from ".."
 import { reduceMatrixWithLines } from "./hba"
 
-tba()
-
-export function tba() {
+export function tba(nodes: Node[], holes: Hole[]) {
 	/**
 	 * The coefficient matrix, `matrix[i][j]`. The `i`s are node index, and the `j`s are the hole index.
 	 */
-	//let matrix = createDistanceMatrix(nodes, holes)
+	let matrix = createDistanceMatrix(nodes, holes)
 
 	//for testing
-	let matrix = [
-		[1, 2, 3],
-		[2, 4, 3],
-		[4, 1, 2]
-	]
+	// let matrix = [
+	// 	[1, 2, 3],
+	// 	[2, 4, 3],
+	// 	[4, 1, 2]
+	// ]
 
 	const original = matrix
 
@@ -58,21 +49,28 @@ export function tba() {
 		debug(`lines: `, testLines)
 	}
 
-	// debug(`Position matrix:\n${stringify(positionMatrix, 1)}`)
 	let zRowCol = allTheSingleZeros(positionMatrix)
-	// debug(`Position matrix:\n${stringify(positionMatrix, 1)}`)
-	// debug(`z:`, zRowCol)
-	// debug(`zLen: `, zRowCol.length === 2)
-	// debug(`stillZ: `, stillZeros(positionMatrix))
-	// positionMatrix = adjustPositionMatrix(zRowCol, positionMatrix)
-	// debug(`Position matrix:\n${stringify(positionMatrix, 1)}`)
 
 	while (stillZeros(positionMatrix)) {
 		adjustPositionMatrix(zRowCol, positionMatrix)
 		zRowCol = allTheSingleZeros(positionMatrix)
 	}
 
+	positionMatrix = convertToOhWon(positionMatrix)
+
 	debug(`Position matrix:\n${stringify(positionMatrix, 1)}`)
+
+	return positionMatrix
+}
+
+export function convertToOhWon(position: number[][]) {
+	for (let i = 0; i < position.length; i++) {
+		for (let j = 0; j < position.length; j++) {
+			position[i][j] -= 1
+		}
+	}
+
+	return position
 }
 
 export function adjustPositionMatrix(zRowCol: number[], position: number[][]) {
