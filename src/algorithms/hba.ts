@@ -1,50 +1,48 @@
-import { stringify, withTransposed, debug } from "../helpers"
+import { stringify, withTransposed, debug, asTuple, getIndicesOfZeros } from "../helpers"
 import { verbosity } from ".."
 import { minimumLines } from "./minimum-lines"
 
 /**
- *
- * @param nodes The mobile nodes that are available
- * @param holes The holes present in the FOI
- * @param matrix The coefficient matrix, `matrix[i][j]` – The `i`s are node index, and the `j`s are the hole index
+ * Calculate how to dispatch the nodes based on HBA.
+ * @param distanceMatrix The coefficient matrix, `matrix[i][j]` – The `i`s are node index, and the `j`s are the hole index
  */
-export function hba(matrix: number[][]) {
-	let modified = matrix
+export function hba(distanceMatrix: number[][]) {
+	debug(`Start HBA`)
 
-	debug(`Distance matrix:\n${stringify(modified)}`)
+	let matrix = distanceMatrix
 
-	modified = withTransposed(modified, subtractColumns)
+	debug(`Distance matrix:\n${stringify(matrix)}`)
 
-	debug(`Subtracted row:\n${stringify(modified)}`)
+	matrix = withTransposed(matrix, subtractColumns)
 
-	modified = subtractColumns(modified)
+	debug(`Subtracted row:\n${stringify(matrix)}`)
 
-	debug(`Subtracted column:\n${stringify(modified)}`)
+	matrix = subtractColumns(matrix)
 
-	reduceMatrixWithLines(modified)
+	debug(`Subtracted column:\n${stringify(matrix)}`)
 
-	debug(`Final matrix:\n${stringify(modified)}`)
+	reduceMatrixWithLines(matrix)
 
-	const zeros = findZeros({ matrix: modified, original: matrix })
+	debug(`Final matrix:\n${stringify(matrix)}`)
 
-	checkAndCrossZeros({ ...getZeroFrequencies(zeros), maxThreshold: modified.length })
+	const zeros = findZeros({ matrix: matrix, original: distanceMatrix })
 
-	debug(`Zeros:`, zeros)
+	selectZeros(mapZeroFrequencies(zeros))
 
 	if (verbosity === "debug") {
 		// Fill the matrix with zeros
-		modified = modified.map((column) => column.map(() => 0))
+		matrix = matrix.map((column) => column.map(() => 0))
 
 		// Put 1s in the result spots
 		zeros
 			.filter(({ checked }) => checked)
-			.forEach(({ column, row }) => (modified[column][row] = 1))
+			.forEach(({ column, row }) => (matrix[column][row] = 1))
 
 		// Result
-		debug(`Result:\n${stringify(modified)}`)
+		debug(`Result:\n${stringify(matrix)}`)
 	}
 
-	return modified
+	return matrix
 }
 
 /**
@@ -69,13 +67,6 @@ export function subtractColumns(matrix: number[][]) {
 	}
 
 	return matrix
-}
-
-export interface Line {
-	/** Whether this is a row or a column. */
-	isColumn: boolean
-	/** The row/column index of this line. */
-	index: number
 }
 
 export interface LineMap {
@@ -173,13 +164,6 @@ export function findZeros({
 		.flat()
 }
 
-export function getIndicesOfZeros(set: number[]) {
-	return set
-		.map((value, index) => ({ value, index }))
-		.filter(({ value }) => value === 0)
-		.map(({ index }) => index)
-}
-
 export interface FrequencyEntry {
 	isColumn: boolean
 	index: number
@@ -191,7 +175,7 @@ export interface FrequencyMap {
 	[index: number]: FrequencyEntry
 }
 
-export function getZeroFrequencies(zeros: Zero[]) {
+export function mapZeroFrequencies(zeros: Zero[]) {
 	const colFrequencies: FrequencyMap = {}
 	const rowFrequencies: FrequencyMap = {}
 
@@ -227,109 +211,77 @@ export function getZeroFrequencies(zeros: Zero[]) {
 	return { colFrequencies, rowFrequencies }
 }
 
-function checkAndCrossZeros({
+function selectZeros({
 	colFrequencies,
-	rowFrequencies,
-	maxThreshold
+	rowFrequencies
 }: {
 	colFrequencies: FrequencyMap
 	rowFrequencies: FrequencyMap
-	maxThreshold: number
 }) {
-	function doCheckFor(map: FrequencyMap, threshold: number) {
-		Object.values(map)
-			.filter(({ frequency }) => frequency <= threshold)
-			.map(({ zeros }) => zeros)
-			.forEach((zeros) =>
-				checkZeros({
-					colFrequencies,
-					rowFrequencies,
-					zeros
-				})
+	function getZeros() {
+		return [...Object.values(colFrequencies), ...Object.values(rowFrequencies)]
+			.map((entry) =>
+				asTuple([
+					entry,
+					entry.zeros.reduce((min, next) => (min.value < next.value ? min : next))
+				])
 			)
-	}
+			.sort(([a, aZero], [b, bZero]) => {
+				const byLength = a.zeros.length - b.zeros.length
 
-	function hasWithin(map: FrequencyMap, threshold: number) {
-		const index = Object.values(map).findIndex(({ frequency }) => frequency <= threshold)
-		return index >= 0
-	}
-
-	function isItEmpty(map: FrequencyMap) {
-		return Object.values(map).length === 0
-	}
-
-	let threshold = 1
-	let moreZerosAtThisThreshold =
-		hasWithin(colFrequencies, threshold) || hasWithin(rowFrequencies, threshold)
-	let isEmpty = isItEmpty(colFrequencies) && isItEmpty(rowFrequencies)
-
-	while (moreZerosAtThisThreshold || !isEmpty) {
-		if (!moreZerosAtThisThreshold) {
-			if (threshold < maxThreshold) {
-				threshold++
-			} else {
-				break
-			}
-		} else {
-			doCheckFor(colFrequencies, threshold)
-			doCheckFor(rowFrequencies, threshold)
-			isEmpty = isItEmpty(colFrequencies) && isItEmpty(rowFrequencies)
-		}
-
-		moreZerosAtThisThreshold =
-			hasWithin(colFrequencies, threshold) || hasWithin(rowFrequencies, threshold)
-	}
-}
-
-export function checkZeros({
-	colFrequencies,
-	rowFrequencies,
-	zeros
-}: {
-	colFrequencies: FrequencyMap
-	rowFrequencies: FrequencyMap
-	zeros: Zero[]
-}) {
-	for (const zero of zeros) {
-		if (!zero.checked && !zero.crossed) {
-			zero.checked = true
-
-			crossAndRemoveZeros({ colFrequencies, rowFrequencies, forZero: zero })
-
-			delete colFrequencies[zero.column]
-			delete rowFrequencies[zero.row]
-		}
-	}
-}
-
-export function crossAndRemoveZeros({
-	colFrequencies,
-	rowFrequencies,
-	forZero
-}: {
-	colFrequencies: FrequencyMap
-	rowFrequencies: FrequencyMap
-	forZero: Zero
-}) {
-	const remove = (fromColumns: boolean) => (other: Zero) => {
-		if (other !== forZero) {
-			other.crossed = true
-
-			const entry = fromColumns ? rowFrequencies[other.row] : colFrequencies[other.column]
-
-			entry.frequency -= 1
-			entry.zeros.remove(other)
-
-			if (entry.zeros.length === 0) {
-				if (fromColumns) {
-					delete rowFrequencies[other.row]
-				} else {
-					delete colFrequencies[other.column]
+				if (byLength) {
+					return byLength
 				}
-			}
+
+				return aZero.value - bZero.value
+			})
+			.map(([, zero]) => zero)
+	}
+
+	function checkAndRemove(zero: Zero) {
+		zero.checked = true
+
+		remove(zero, "columns")
+		remove(zero, "rows")
+
+		delete colFrequencies[zero.column]
+		delete rowFrequencies[zero.row]
+
+		function remove(zero: Zero, from: "columns" | "rows") {
+			const entry =
+				from === "columns" ? colFrequencies[zero.column] : rowFrequencies[zero.row]
+
+			entry.zeros.forEach((otherZero: Zero) => {
+				if (otherZero !== zero) {
+					otherZero.crossed = true
+
+					const otherEntry =
+						from === "columns"
+							? rowFrequencies[otherZero.row]
+							: colFrequencies[otherZero.column]
+
+					otherEntry.frequency -= 1
+					otherEntry.zeros.remove(otherZero)
+
+					if (otherEntry.zeros.length === 0) {
+						if (from === "columns") {
+							delete rowFrequencies[otherZero.row]
+						} else {
+							delete colFrequencies[otherZero.column]
+						}
+					}
+				}
+			})
 		}
 	}
 
-	colFrequencies[forZero.column].zeros.forEach(remove(true))
-	rowFrequencies[forZero.row].zeros.forEach(remove(false))
+	let zeros = getZeros()
+
+	while (zeros.length > 0) {
+		const zero = zeros.first!
+
+		checkAndRemove(zero)
+
+		zeros = getZeros()
+	}
 }

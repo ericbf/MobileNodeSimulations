@@ -2,9 +2,9 @@ import { Flatten } from "./helpers"
 
 declare global {
 	interface Array<T> {
-		random: T
-		first: T
-		last: T
+		random: T | undefined
+		first: T | undefined
+		last: T | undefined
 
 		flat(levels?: 1): Flatten<T>
 		flat(levels: 0): T[]
@@ -19,6 +19,7 @@ declare global {
 	}
 
 	interface ObjectConstructor {
+		equals<T extends {}, K extends {}>(a: T, b: T): boolean
 		entries<T, K extends keyof T>(obj: T): [string, T[K]][]
 		keys<T, K extends keyof T>(obj: T): K[]
 		values<T, K extends keyof T>(obj: T): T[K][]
@@ -96,6 +97,37 @@ if (!Array.prototype.remove) {
 			return removed
 		}
 	})
+}
+
+if (!Object.equals) {
+	Object.equals = (a, b) => {
+		if (a === b) {
+			return true
+		}
+
+		if (typeof a !== typeof b) {
+			return false
+		}
+
+		if (typeof a === "object") {
+			const aEntries = Object.entries(a)
+			const bKeys = Object.keys(a)
+
+			if (aEntries.length !== bKeys.length) {
+				return false
+			}
+
+			for (const [key, value] of aEntries) {
+				if (!Object.equals(value, b[key as keyof typeof b])) {
+					return false
+				}
+			}
+
+			return true
+		}
+
+		return false
+	}
 }
 
 export {}

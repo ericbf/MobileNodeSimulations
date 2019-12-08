@@ -15,18 +15,18 @@ import {
 	info,
 	debug
 } from "./helpers"
-import { novel } from "./algorithms/novel"
+import { batteryAware } from "./algorithms/battery-aware"
 import { Hole } from "./models/hole"
+import { tba } from "./algorithms/tba"
 
-export const verbosity: "debug" | "info" | "quiet" = "info" as "debug" | "info" | "quiet"
+export const verbosity: "debug" | "info" | "quiet" = "debug" as "debug" | "info" | "quiet"
 export const shouldRound = true
 export const sensingRange = 5
-export const sensingConfidence = 0.8
-export const getConfidence = (distance: number) =>
-	-1 / (1 + Math.pow(Math.E, (-(distance - 2 * sensingRange) / 0.7) * sensingRange)) + 1
-export const numberStaticNodes = 28
-export const fieldSize = 50
-const trials = 100
+export const numberStaticNodes = 15
+export const fieldSize = 25
+export const maxBattery = fieldSize * 3
+export const minBattery = Math.sqrt(fieldSize * fieldSize * 2)
+const trials = 10000
 
 // debug(`Matrix:\n${stringify(matrices[0])}`)
 
@@ -54,17 +54,12 @@ const trials = 100
 // 	}
 // }
 
-let tie = 0
+let hbaTotal = 0
+let batteryAwareTotal = 0
+let tbaTotal = 0
 
-class Stats {
-	wins = 0
-	total = 0
-	winTotal = 0
-	loseTotal = 0
-}
-
-const hbaStats = new Stats()
-const novelStats = new Stats()
+let hbaMin = 0
+let batteryAwareMin = 0
 
 const dots = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
 
@@ -79,74 +74,97 @@ for (let i = 0; i < trials; i++) {
 	debug(`Number nodes: ${mobileNodes.length}`)
 	debug(`Number holes: ${holes.length}`)
 
-	const hbaTotal = getTotal(mobileNodes, holes, distanceMatrix, hba(distanceMatrix))
+	const hbaStats = getStats(mobileNodes, holes, distanceMatrix, hba(distanceMatrix))
 
-	hbaStats.total += hbaTotal
+	const batteryAwareStats = getStats(
+		mobileNodes,
+		holes,
+		distanceMatrix,
+		batteryAware(distanceMatrix, mobileNodes, holes, hba)
+	)
 
-	const novelTotal = getTotal(mobileNodes, holes, distanceMatrix, novel(distanceMatrix))
+	debug(`hba stats: ${JSON.stringify(hbaStats, null, 4)}`)
+	debug(`Battery aware stats: ${JSON.stringify(batteryAwareStats, null, 4)}`)
 
-	novelStats.total += novelTotal
+	hbaTotal += hbaStats.total
+	batteryAwareTotal += batteryAwareStats.total
 
-	if (hbaTotal < novelTotal) {
-		hbaStats.wins += 1
-
-		hbaStats.winTotal += hbaTotal
-		novelStats.loseTotal += novelTotal
-	} else if (hbaTotal === novelTotal) {
-		tie += 1
-	} else {
-		novelStats.wins += 1
-
-		hbaStats.loseTotal += hbaTotal
-		novelStats.winTotal += novelTotal
-	}
+	hbaMin += hbaStats.minBatteryAfter
+	batteryAwareMin += batteryAwareStats.minBatteryAfter
+	// tbaTotal += tbaIteration
 }
 
 if (verbosity === "info") {
+	process.stdout.clearLine && process.stdout.clearLine(0)
 	process.stdout.cursorTo && process.stdout.cursorTo(0)
 }
 
-info(`HBA won ${hbaStats.wins}, tied ${tie}, novel won ${novelStats.wins}.`)
 info(
-	`HBA total was ${hbaStats.total.toFixed(1)}, novel total was ${novelStats.total.toFixed(
-		1
-	)}.`
-)
-info(
-	`On average, novel was ${((1 - novelStats.total / hbaStats.total) * 100).toFixed(
-		0
-	)}% better.`
-)
-info(
-	novelStats.winTotal > 0
-		? `When novel won, it was ${(
-				(1 - novelStats.winTotal / hbaStats.loseTotal) *
-				100
-		  ).toFixed(0)}% better.`
-		: `Novel never won.`
-)
-info(
-	hbaStats.winTotal > 0
-		? `When HBA won, it was ${(
-				(1 - hbaStats.winTotal / novelStats.loseTotal) *
-				100
-		  ).toFixed(0)}% better.`
-		: `HBA never won.`
+	`HBA total: ${hbaTotal.toFixed(1)}
+Battery Aware total: ${batteryAwareTotal.toFixed(1)}`
 )
 
-function getTotal(
+hbaMin /= trials
+batteryAwareMin /= trials
+
+info(
+	`HBA average min battery: ${hbaMin.toFixed(1)}
+Battery Aware average min battery: ${batteryAwareMin.toFixed(1)}`
+)
+
+function getStats(
 	nodes: Node[],
 	holes: Hole[],
 	distanceMatrix: number[][],
 	dispatch: number[][]
 ) {
-	return nodes
-		.map((_, column) => {
-			const row = dispatch[column].slice(0, holes.length).findIndex((n) => n > 0)
+	const nodeMovements = nodes.map((_, column) => {
+		const row = dispatch[column].slice(0, holes.length).findIndex((n) => n > 0)
 
-			return row >= 0 ? distanceMatrix[column][row] * dispatch[column][row] : 0
-		})
-		.reduce((trans, value) => trans + value)
+		return row >= 0 ? distanceMatrix[column][row] : 0
+	})
+
+	const total = nodeMovements.reduce((trans, value) => trans + value)
+
+	const totalBatteryBefore = nodes.reduce((trans, { battery }) => trans + battery, 0)
+	const averageBatteryBefore = totalBatteryBefore / nodes.length
+
+	const nodeBatteriesBefore = nodes.map(({ battery }) => battery)
+
+	const maxBatteryBefore = Math.max(...nodes.map(({ battery }) => battery))
+	const minBatteryBefore = Math.min(...nodes.map(({ battery }) => battery))
+
+	const nodeBatteriesAfter = nodes.map(({ battery }, i) => {
+		return battery - nodeMovements[i]
+	})
+
+	const maxBatteryAfter = Math.max(...nodeBatteriesAfter)
+	const minBatteryAfter = Math.min(...nodeBatteriesAfter)
+
+	const totalBatteryAfter = nodeBatteriesAfter.reduce(
+		(trans, battery) => trans + battery,
+		0
+	)
+	const averageBatteryAfter = totalBatteryAfter / nodes.length
+
+	const totalBatteryUsage = totalBatteryBefore - totalBatteryAfter
+	const averageBatteryUsage = averageBatteryBefore - averageBatteryAfter
+
+	return {
+		total,
+		nodeBatteriesBefore,
+		maxBatteryBefore,
+		minBatteryBefore,
+		totalBatteryBefore,
+		averageBatteryBefore,
+		nodeBatteriesAfter,
+		maxBatteryAfter,
+		minBatteryAfter,
+		totalBatteryAfter,
+		averageBatteryAfter,
+		totalBatteryUsage,
+		averageBatteryUsage
+	}
 }
 
 /** Create a square distance matrix with each column is the distance from a node to each hole. If the number of nodes isn't equal the number of holes, fill the array with `NaN` to make it square. */
@@ -181,7 +199,10 @@ function randomlyPlaceNodes(howMany = numberStaticNodes): Node[] {
 		return {
 			id,
 			x: Math.random() * fieldSize,
-			y: Math.random() * fieldSize
+			y: Math.random() * fieldSize,
+			battery: (Math.random() * minBattery + maxBattery - minBattery).round(
+				shouldRound ? 0 : 3
+			)
 		}
 	}
 

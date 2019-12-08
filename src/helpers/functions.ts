@@ -107,6 +107,13 @@ export function withTransposed(
 	return transposed(callback(transposed(matrix)))
 }
 
+export function getIndicesOfZeros(set: number[]) {
+	return set
+		.map((value, index) => ({ value, index }))
+		.filter(({ value }) => value === 0)
+		.map(({ index }) => index)
+}
+
 /**
  * Get a better representation of the passed matrix, that is, get columns and rows showing with the right orientation.
  * @param matrix The matrix to stringify.
@@ -114,7 +121,9 @@ export function withTransposed(
 export function stringify(matrix: number[][]) {
 	return transposed(matrix)
 		.map((column) => {
-			return column.map((value) => `${value.toFixed(shouldRound ? 0 : 3)}`).join(`\t`)
+			return column
+				.map((value) => `    ${value.toFixed(shouldRound ? 0 : 3)}`.slice(-4))
+				.join("")
 		})
 		.join(`\n`)
 }
@@ -151,4 +160,34 @@ export function info(...args: any[]) {
 	if (verbosity === "debug" || verbosity === "info") {
 		console.log(...args)
 	}
+}
+
+/** Force TS to cast an array as a tuple. */
+export function asTuple<T1>(tuple: [T1]): [T1]
+/** Force TS to cast an array as a tuple. */
+export function asTuple<T1, T2>(tuple: [T1, T2]): [T1, T2]
+/** Force TS to cast an array as a tuple. */
+export function asTuple<T1, T2, T3>(tuple: [T1, T2, T3]): [T1, T2, T3]
+/** Force TS to cast an array as a tuple. */
+export function asTuple<T1, T2, T3, T4>(tuple: [T1, T2, T3, T4]): [T1, T2, T3, T4]
+/** Force TS to cast an array as a tuple. */
+export function asTuple<T1, T2, T3, T4, T5>(
+	tuple: [T1, T2, T3, T4, T5]
+): [T1, T2, T3, T4, T5]
+/** Force TS to cast an array as a tuple. */
+export function asTuple<T1, T2, T3, T4, T5, T6>(
+	tuple: [T1, T2, T3, T4, T5, T6]
+): [T1, T2, T3, T4, T5, T6]
+/** Force TS to cast an array as a tuple. */
+export function asTuple<T1, T2, T3, T4, T5, T6, T7>(
+	tuple: [T1, T2, T3, T4, T5, T6, T7]
+): [T1, T2, T3, T4, T5, T6, T7]
+/** Force TS to cast an array as a tuple. */
+export function asTuple<T1, T2, T3, T4, T5, T6, T7, T8>(
+	tuple: [T1, T2, T3, T4, T5, T6, T7, T8]
+): [T1, T2, T3, T4, T5, T6, T7, T8]
+/** You probably shouldn't be using a tuple for so many elements. */
+export function asTuple<T>(tuple: T[]): T[]
+export function asTuple<T>(tuple: T[]) {
+	return tuple
 }

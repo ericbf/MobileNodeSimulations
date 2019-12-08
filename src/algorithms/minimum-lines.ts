@@ -1,5 +1,11 @@
-import { Line, getIndicesOfZeros } from "./hba"
-import { transposed, omit, ValueOrFunction } from "../helpers"
+import { transposed, omit, ValueOrFunction, getIndicesOfZeros } from "../helpers"
+
+export interface Line {
+	/** Whether this is a row or a column. */
+	isColumn: boolean
+	/** The row/column index of this line. */
+	index: number
+}
 
 export function minimumLines(matrix: number[][]): Line[] {
 	const greedy = greedyLines(matrix)
