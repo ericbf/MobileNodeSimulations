@@ -1,11 +1,5 @@
-import {
-	stringify,
-	transpose,
-	debug,
-	minimumLines,
-	withTransposed,
-	makeDispatchMatrix
-} from "../helpers"
+import { stringify, withTransposed, makeDispatchMatrix } from "../helpers"
+import { debug } from "../index"
 
 interface TbaSlot {
 	value: number
@@ -17,20 +11,77 @@ interface TbaSlot {
  * @param matrix The coefficient matrix, `matrix[i][j]` – The `i`s are node index, and the `j`s are the hole index
  */
 export function tba(distanceMatrix: number[][]) {
-	debug(`Start TBA`)
+	if (debug) {
+		console.log(`Start TBA`)
+		console.log(`Distance matrix:\n${stringify(distanceMatrix)}`)
+	}
 
 	let matrix = distanceMatrix.map((col) =>
-		col.map<TbaSlot>((value) => ({ value, circled: false }))
+		col.map<TbaSlot>((value) => ({ value, circled: !isFinite(value) }))
 	)
 
 	withTransposed(matrix, circleLowestInEachColumn)
+
+	if (debug) {
+		console.log(
+			`Circled row:\n${matrix
+				.map((col, i) =>
+					col
+						.map((_, j) => {
+							const { circled, value } = matrix[j][i]
+
+							return (circled ? `   (${value})` : `   ${value} `).slice(-5)
+						})
+						.join("")
+				)
+				.join("\n")}`
+		)
+	}
+
 	circleLowestInEachColumn(matrix)
+
+	if (debug) {
+		console.log(
+			`Circled column:\n${matrix
+				.map((col, i) =>
+					col
+						.map((_, j) => {
+							const { circled, value } = matrix[j][i]
+
+							return (circled ? `   (${value})` : `   ${value} `).slice(-5)
+						})
+						.join("")
+				)
+				.join("\n")}`
+		)
+	}
 
 	let result = makeDispatchMatrix(matrix, (v) => v.circled)
 
 	while (!result.every((col) => col.some((v) => v === 1))) {
 		circleNextLowest(matrix)
+
+		if (debug) {
+			console.log(
+				`Circled next:\n${matrix
+					.map((col, i) =>
+						col
+							.map((_, j) => {
+								const { circled, value } = matrix[j][i]
+
+								return (circled ? `   (${value})` : `   ${value} `).slice(-5)
+							})
+							.join("")
+					)
+					.join("\n")}`
+			)
+		}
+
 		result = makeDispatchMatrix(matrix, (v) => v.circled)
+	}
+
+	if (debug) {
+		console.log(`Result:\n${stringify(result)}`)
 	}
 
 	return result
@@ -42,9 +93,12 @@ export function tba(distanceMatrix: number[][]) {
 export function circleLowestInEachColumn(matrix: TbaSlot[][]) {
 	matrix.forEach(
 		(column) =>
-			(column.reduce((trans, next) =>
-				next.value < trans.value ? next : trans
-			).circled = true)
+			(column
+				.filter(({ circled }) => !circled)
+				.reduce((trans, next) => (next.value < trans.value ? next : trans), {
+					value: Infinity,
+					circled: false
+				}).circled = true)
 	)
 }
 

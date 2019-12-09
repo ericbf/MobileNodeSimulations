@@ -1,38 +1,50 @@
 import {
 	stringify,
 	withTransposed,
-	debug,
 	asTuple,
 	minimumLines,
 	makeDispatchMatrix
 } from "../helpers"
+import { debug } from "../index"
 
 /**
  * Calculate how to dispatch the nodes based on HBA.
  * @param distanceMatrix The coefficient matrix, `matrix[i][j]` – The `i`s are node index, and the `j`s are the hole index
  */
 export function hba(distanceMatrix: number[][]) {
-	debug(`Start HBA`)
+	if (debug) {
+		console.log(`Start HBA`)
+	}
 
 	let matrix = distanceMatrix.map((col) => col.slice(0))
 
-	debug(`Distance matrix:\n${stringify(matrix)}`)
+	if (debug) {
+		console.log(`Distance matrix:\n${stringify(matrix)}`)
+	}
 
 	withTransposed(matrix, subtractColumns)
 
-	debug(`Subtracted row:\n${stringify(matrix)}`)
+	if (debug) {
+		console.log(`Subtracted row:\n${stringify(matrix)}`)
+	}
 
 	subtractColumns(matrix)
 
-	debug(`Subtracted column:\n${stringify(matrix)}`)
+	if (debug) {
+		console.log(`Subtracted column:\n${stringify(matrix)}`)
+	}
 
 	reduceMatrixWithLines(matrix)
 
-	debug(`Final matrix:\n${stringify(matrix)}`)
+	if (debug) {
+		console.log(`Final matrix:\n${stringify(matrix)}`)
+	}
 
-	const result = makeDispatchMatrix(matrix, (v) => v === 0)
+	const result = makeDispatchMatrix(matrix, (v) => !isFinite(v) || v === 0)
 
-	debug(`Result:\n${stringify(result)}`)
+	if (debug) {
+		console.log(`Result:\n${stringify(result)}`)
+	}
 
 	return result
 }
@@ -43,7 +55,7 @@ export function hba(distanceMatrix: number[][]) {
  */
 export function subtractColumns(matrix: number[][]) {
 	return matrix.forEach((col, i) => {
-		const min = Math.min(...col)
+		const min = Math.min(...col.filter(isFinite))
 
 		return col.forEach((_, j) => (matrix[i][j] -= min))
 	})
@@ -62,9 +74,11 @@ export function getEmptyLineMap(matrix: number[][]) {
 }
 
 export function reduceMatrixWithLines(matrix: number[][]) {
-	let lines = minimumLines(matrix)
+	let lines = minimumLines(matrix, (v) => !isFinite(v) || v === 0)
 
-	debug(`Lines are:`, lines)
+	if (debug) {
+		console.log(`Lines are:`, lines)
+	}
 
 	let colLinesByIndex: LineMap
 	let rowLinesByIndex: LineMap
@@ -108,7 +122,9 @@ export function reduceMatrixWithLines(matrix: number[][]) {
 			)
 		}
 
-		debug(`Uncovered min is ${uncoveredMin}`)
+		if (debug) {
+			console.log(`Uncovered min is ${uncoveredMin}`)
+		}
 
 		for (const [column, colLined] of Object.entries(colLinesByIndex)) {
 			const i = parseInt(column, 10)
@@ -126,10 +142,14 @@ export function reduceMatrixWithLines(matrix: number[][]) {
 			}
 		}
 
-		debug(`Updated matrix:\n${stringify(matrix)}`)
+		if (debug) {
+			console.log(`Updated matrix:\n${stringify(matrix)}`)
+		}
 
-		lines = minimumLines(matrix)
+		lines = minimumLines(matrix, (v) => !isFinite(v) || v === 0)
 
-		debug(`Lines are now:`, lines)
+		if (debug) {
+			console.log(`Lines are now:`, lines)
+		}
 	}
 }

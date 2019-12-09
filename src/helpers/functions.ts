@@ -1,4 +1,4 @@
-import { shouldRound, verbosity } from ".."
+import { shouldRound } from ".."
 import { Position } from "../models/position"
 
 /**
@@ -92,11 +92,14 @@ export function isUnique(pos: Position, i: number, arr: Position[]) {
  * @param matrix The matrix to transpose.
  */
 export function transpose<T>(matrix: T[][]) {
-	return matrix.forEach((column, i) =>
-		column.forEach(
-			(_, j) => ([matrix[i][j], matrix[j][i]] = [matrix[j][i], matrix[i][j]])
-		)
-	)
+	for (let i = 0; i < matrix.length; i++) {
+		for (let j = 0; j < i; j++) {
+			const temp = matrix[i][j]
+
+			matrix[i][j] = matrix[j][i]
+			matrix[j][i] = temp
+		}
+	}
 }
 
 export function transposed<T>(matrix: T[][]) {
@@ -151,26 +154,6 @@ export function omit<T extends object, K extends keyof T>(obj: T, ...keys: K[]) 
 	})
 
 	return ret
-}
-
-/**
- * Write something to log if verbosity is set to debug.
- * @param args The args to write to log.
- */
-export function debug(...args: any[]) {
-	if (verbosity === "debug") {
-		console.log(...args)
-	}
-}
-
-/**
- * Write something to log if verbosity is set to info or debug.
- * @param args The args to write to log.
- */
-export function info(...args: any[]) {
-	if (verbosity === "debug" || verbosity === "info") {
-		console.log(...args)
-	}
 }
 
 /** Force TS to cast an array as a tuple. */

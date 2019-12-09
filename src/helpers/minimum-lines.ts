@@ -7,10 +7,10 @@ export interface Line {
 	index: number
 }
 
-export function minimumLines(matrix: number[][]): Line[] {
+export function minimumLines<T>(matrix: T[][], eligible: (value: T) => boolean): Line[] {
 	const edges = matrix
 		.flatMap((col, i) =>
-			col.map((value, j) => (value === 0 ? asTuple([i, j]) : undefined))
+			col.map((value, j) => (eligible(value) ? asTuple([i, j]) : undefined))
 		)
 		.filter(isDefined)
 	const size = matrix.length
