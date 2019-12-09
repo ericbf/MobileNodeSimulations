@@ -88,23 +88,40 @@ export function isUnique(pos: Position, i: number, arr: Position[]) {
 }
 
 /**
- * Get a transposed version of the passed matrix.
+ * Transpose a matrix in place
  * @param matrix The matrix to transpose.
  */
+export function transpose<T>(matrix: T[][]) {
+	return matrix.forEach((column, i) =>
+		column.forEach(
+			(_, j) => ([matrix[i][j], matrix[j][i]] = [matrix[j][i], matrix[i][j]])
+		)
+	)
+}
+
 export function transposed<T>(matrix: T[][]) {
-	return matrix.map((_, i) => matrix.map((row) => row[i]))
+	matrix = matrix.map((col) => col.slice(0))
+	matrix.forEach((column, i) =>
+		column.forEach(
+			(_, j) => ([matrix[i][j], matrix[j][i]] = [matrix[j][i], matrix[i][j]])
+		)
+	)
+
+	return matrix
 }
 
 /**
- * Perform a callback with a transposed version of the passed matrix, then re-transpose before returning.
+ * Transpose a matrix in place, perform a callback in place, then transpose in place again before returning.
  * @param matrix The matrix to transpose, pass to the callback, then re-transpose.
  * @param callback The callback to call with the transposed matrix.
  */
-export function withTransposed(
+export function transposeAndDo(
 	matrix: number[][],
-	callback: (matrix: number[][]) => number[][]
+	callback: (matrix: number[][]) => void
 ) {
-	return transposed(callback(transposed(matrix)))
+	transpose(matrix)
+	callback(matrix)
+	transpose(matrix)
 }
 
 export function getIndicesOfZeros(set: number[]) {
@@ -191,3 +208,13 @@ export function asTuple<T>(tuple: T[]): T[]
 export function asTuple<T>(tuple: T[]) {
 	return tuple
 }
+
+export function isDefined<T>(item: T | undefined): item is T {
+	return item != undefined
+}
+
+export const findMatching = require("bipartite-matching") as (
+	numberOfVerticesOnLeft: number,
+	numberOfVerticesOnRight: number,
+	edges: [number, number][]
+) => [number, number][]

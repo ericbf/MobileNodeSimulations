@@ -1,22 +1,25 @@
-import { stringify, transposed, debug } from "../helpers"
+import { stringify, transpose, debug } from "../helpers"
 import { minimumLines } from "./minimum-lines"
 
 /**
  * Calculate how to dispatch the nodes based on TBA.
  * @param matrix The coefficient matrix, `matrix[i][j]` – The `i`s are node index, and the `j`s are the hole index
  */
-export function tba(matrix: number[][]) {
+export function tba(distanceMatrix: number[][]) {
 	debug(`Start TBA`)
 
+	let matrix = distanceMatrix.map((col) => col.slice(0))
 	let positionMatrix = makePositionMatrix(matrix)
 
 	debug(`Distance matrix:\n${stringify(matrix)}`)
 
-	matrix = transposed(matrix)
-	positionMatrix = transposed(positionMatrix)
+	transpose(matrix)
+	transpose(positionMatrix)
+
 	identifyColumnMinimum(matrix, positionMatrix)
-	matrix = transposed(matrix)
-	positionMatrix = transposed(positionMatrix)
+
+	transpose(matrix)
+	transpose(positionMatrix)
 
 	debug(`Distance matrix:\n${stringify(matrix)}`)
 

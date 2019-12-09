@@ -1,6 +1,4 @@
-const findMatching = require("bipartite-matching") as FindMatching
-
-import { asTuple, debug, omit } from "../helpers"
+import { asTuple, isDefined, findMatching } from "../helpers"
 
 export interface Line {
 	/** Whether this is a row or a column. */
@@ -38,16 +36,6 @@ export function minimumLines(matrix: number[][]): Line[] {
 
 	return lines
 }
-
-function isDefined<T>(item: T | undefined): item is T {
-	return item != undefined
-}
-
-type FindMatching = (
-	numberOfVerticesOnLeft: number,
-	numberOfVerticesOnRight: number,
-	edges: [number, number][]
-) => [number, number][]
 
 interface MatchVertex {
 	isLeft: boolean

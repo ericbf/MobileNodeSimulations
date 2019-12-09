@@ -21,7 +21,7 @@ import { batteryAware } from "./algorithms/battery-aware"
 import { Hole } from "./models/hole"
 import { tba } from "./algorithms/tba"
 
-export const verbosity: "debug" | "info" | "quiet" = "debug" as "debug" | "info" | "quiet"
+export const verbosity: "debug" | "info" | "quiet" = "info" as "debug" | "info" | "quiet"
 export const shouldRound = true
 export const sensingRange = 3
 export const numberStaticNodes = 5
@@ -177,32 +177,13 @@ function getStats(
 /** Create a square distance matrix with each column is the distance from a node to each hole. If the number of nodes isn't equal the number of holes, fill the array with `NaN` to make it square. */
 export function createDistanceMatrix(nodes: Node[], holes: Hole[]) {
 	// return transposed([
-	// 	[0, 4, 4, 3, 0, 0, 0],
-	// 	[4, 5, 8, 3, 0, 3, 3],
-	// 	[10, 4, 12, 2, 0, 4, 4],
-	// 	[13, 3, 13, 1, 0, 7, 7],
-	// 	[0, 3, 0, 3, 0, 1, 1],
-	// 	[11, 0, 7, 1, 0, 4, 4],
-	// 	[12, 0, 9, 0, 0, 4, 4]
-	// ])
-	// return transposed([
-	// 	[16, 9, 16, 25, 12, 6, 11, 6, 11, 20, 9, 7, 19, 20, 10, 31, 31],
-	// 	[18, 9, 12, 24, 7, 3, 10, 5, 14, 20, 12, 11, 17, 22, 13, 31, 31],
-	// 	[27, 16, 9, 26, 4, 11, 16, 14, 23, 23, 22, 22, 19, 28, 21, 31, 31],
-	// 	[26, 15, 8, 24, 4, 11, 14, 13, 22, 22, 22, 21, 17, 26, 21, 31, 31],
-	// 	[24, 13, 4, 20, 6, 12, 12, 13, 21, 18, 21, 21, 13, 23, 19, 31, 31],
-	// 	[16, 7, 6, 11, 11, 11, 6, 10, 14, 9, 15, 16, 4, 14, 12, 31, 31],
-	// 	[2, 13, 23, 18, 24, 18, 14, 15, 6, 14, 8, 10, 17, 8, 7, 31, 31],
-	// 	[12, 5, 9, 10, 14, 11, 4, 9, 11, 6, 12, 13, 4, 10, 9, 31, 31],
-	// 	[12, 6, 10, 9, 15, 12, 5, 10, 11, 5, 13, 14, 4, 9, 9, 31, 31],
-	// 	[9, 7, 13, 9, 17, 13, 6, 11, 9, 4, 11, 13, 6, 6, 8, 31, 31],
-	// 	[10, 7, 12, 9, 17, 13, 6, 11, 10, 4, 12, 14, 5, 7, 8, 31, 31],
-	// 	[12, 7, 11, 8, 16, 13, 6, 11, 12, 4, 13, 15, 3, 9, 10, 31, 31],
-	// 	[4, 14, 23, 17, 26, 20, 15, 17, 8, 13, 11, 13, 17, 7, 9, 31, 31],
-	// 	[11, 20, 27, 15, 31, 26, 20, 23, 16, 14, 18, 20, 19, 8, 16, 31, 31],
-	// 	[11, 17, 23, 10, 28, 24, 17, 21, 15, 9, 18, 20, 14, 5, 15, 31, 31],
-	// 	[19, 17, 17, 2, 23, 22, 16, 21, 20, 6, 22, 24, 8, 12, 19, 31, 31],
-	// 	[25, 21, 16, 10, 23, 25, 19, 24, 26, 13, 28, 29, 11, 20, 24, 31, 31]
+	// 	[4, 3, 5, 4, 6, 0, 0],
+	// 	[0, 7, 7, 3, 0, 2, 2],
+	// 	[0, 9, 8, 4, 0, 2, 2],
+	// 	[3, 0, 2, 2, 6, 0, 0],
+	// 	[0, 2, 2, 0, 4, 2, 2],
+	// 	[5, 0, 0, 3, 10, 0, 0],
+	// 	[2, 2, 0, 0, 7, 1, 1]
 	// ])
 
 	const size = Math.max(nodes.length, holes.length)
