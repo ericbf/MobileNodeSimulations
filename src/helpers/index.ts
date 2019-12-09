@@ -1,3 +1,5 @@
+export * from "./find-cover"
+export * from "./find-matching"
 export * from "./functions"
 export * from "./minimum-lines"
 export * from "./types"

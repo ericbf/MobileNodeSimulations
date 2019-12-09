@@ -1,5 +1,6 @@
 import { shouldRound } from ".."
 import { Position } from "../models/position"
+import { findMatching } from "./find-matching"
 
 /**
  * Get a cartesian pair from a position.
@@ -189,12 +190,6 @@ export function asTuple<T>(tuple: T[]) {
 export function isDefined<T>(item: T | undefined): item is T {
 	return item != undefined
 }
-
-export const findMatching = require("bipartite-matching") as (
-	numberOfVerticesOnLeft: number,
-	numberOfVerticesOnRight: number,
-	edges: [number, number][]
-) => [number, number][]
 
 export function makeDispatchMatrix<T>(matrix: T[][], isEligible: (value: T) => boolean) {
 	const size = matrix.length
