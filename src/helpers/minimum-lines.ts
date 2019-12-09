@@ -1,4 +1,4 @@
-import { asTuple, isDefined, findMatching } from "../helpers"
+import { asTuple, isDefined, findMatching } from "."
 
 export interface Line {
 	/** Whether this is a row or a column. */

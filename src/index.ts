@@ -1,5 +1,6 @@
 import "./globals"
 
+import { Stats } from "fast-stats"
 import { Delaunay } from "d3-delaunay"
 import assert from "assert"
 // import { promises as fs } from "fs"
@@ -21,47 +22,14 @@ import { batteryAware } from "./algorithms/battery-aware"
 import { Hole } from "./models/hole"
 import { tba } from "./algorithms/tba"
 
-export const verbosity: "debug" | "info" | "quiet" = "info" as "debug" | "info" | "quiet"
+export const verbosity: "debug" | "info" | "quiet" = "debug" as "debug" | "info" | "quiet"
 export const shouldRound = true
 export const sensingRange = 3
-export const numberStaticNodes = 5
-export const fieldSize = 10
+export const numberStaticNodes = 20
+export const fieldSize = 20
 export const maxBattery = fieldSize * 3
 export const minBattery = Math.sqrt(fieldSize * fieldSize * 2)
-const trials = 10000
-
-// debug(`Matrix:\n${stringify(matrices[0])}`)
-
-// let start = performance.now()
-
-// const greedyResults = matrices.map(greedyLines)
-
-// debug(`Greedy took ${performance.now() - start}`)
-
-// start = performance.now()
-
-// const wikiResults = matrices.map(wikiLines)
-
-// debug(`Wiki took ${performance.now() - start}`)
-
-// for (const [i, greedyResult] of greedyResults.entries()) {
-// 	if (greedyResult.length !== wikiResults[i].length) {
-// 		debug(
-// 			`Greedy (${greedyResult.length}):`,
-// 			greedyResult,
-// 			`; wiki (${wikiResults[i].length}):`,
-// 			wikiResults[i],
-// 			`; matrix:\n${stringify(matrices[i])}`
-// 		)
-// 	}
-// }
-
-let hbaTotal = 0
-let batteryAwareTotal = 0
-let tbaTotal = 0
-
-let hbaMin = 0
-let batteryAwareMin = 0
+const trials = 1
 
 const dots = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
 
@@ -76,43 +44,26 @@ for (let i = 0; i < trials; i++) {
 	debug(`Number nodes: ${mobileNodes.length}`)
 	debug(`Number holes: ${holes.length}`)
 
-	const hbaStats = getStats(mobileNodes, holes, distanceMatrix, hba(distanceMatrix))
+	const hbaDispatch = hba(distanceMatrix)
+	const batteryHbaDispatch = batteryAware(distanceMatrix, mobileNodes, holes, hba)
+	const tbaDispatch = tba(distanceMatrix)
+	const batteryTbaDispatch = batteryAware(distanceMatrix, mobileNodes, holes, tba)
 
-	const batteryAwareStats = getStats(
-		mobileNodes,
-		holes,
-		distanceMatrix,
-		batteryAware(distanceMatrix, mobileNodes, holes, hba)
-	)
+	const hbaStats = getStats(mobileNodes, holes, distanceMatrix, hbaDispatch)
+	const batteryHbaStats = getStats(mobileNodes, holes, distanceMatrix, batteryHbaDispatch)
+	const tbaStats = getStats(mobileNodes, holes, distanceMatrix, tbaDispatch)
+	const batteryTbaStats = getStats(mobileNodes, holes, distanceMatrix, batteryTbaDispatch)
 
 	debug(`hba stats: ${JSON.stringify(hbaStats, null, 4)}`)
-	debug(`Battery aware stats: ${JSON.stringify(batteryAwareStats, null, 4)}`)
-
-	hbaTotal += hbaStats.total
-	batteryAwareTotal += batteryAwareStats.total
-
-	hbaMin += hbaStats.minBatteryAfter
-	batteryAwareMin += batteryAwareStats.minBatteryAfter
-	// tbaTotal += tbaIteration
+	debug(`Battery hba stats: ${JSON.stringify(batteryHbaStats, null, 4)}`)
+	debug(`Tba stats: ${JSON.stringify(tbaStats, null, 4)}`)
+	debug(`Battery tba stats: ${JSON.stringify(batteryTbaStats, null, 4)}`)
 }
 
 if (verbosity === "info") {
 	process.stdout.clearLine && process.stdout.clearLine(0)
 	process.stdout.cursorTo && process.stdout.cursorTo(0)
 }
-
-info(
-	`HBA total: ${hbaTotal.toFixed(1)}
-Battery Aware total: ${batteryAwareTotal.toFixed(1)}`
-)
-
-hbaMin /= trials
-batteryAwareMin /= trials
-
-info(
-	`HBA average min battery: ${hbaMin.toFixed(1)}
-Battery Aware average min battery: ${batteryAwareMin.toFixed(1)}`
-)
 
 function getStats(
 	nodes: Node[],
@@ -133,25 +84,24 @@ function getStats(
 
 	const total = nodeMovements.reduce((trans, value) => trans + value)
 
-	const totalBatteryBefore = nodes.reduce((trans, { battery }) => trans + battery, 0)
-	const averageBatteryBefore = totalBatteryBefore / nodes.length
-
 	const nodeBatteriesBefore = nodes.map(({ battery }) => battery)
-
-	const maxBatteryBefore = Math.max(...nodes.map(({ battery }) => battery))
-	const minBatteryBefore = Math.min(...nodes.map(({ battery }) => battery))
-
 	const nodeBatteriesAfter = nodes.map(({ battery }, i) => {
 		return battery - nodeMovements[i]
 	})
 
+	const batteryStatsBefore = (new Stats().push(nodeBatteriesBefore) as unknown) as Stats
+	const batteryStatsAfter = (new Stats().push(nodeBatteriesAfter) as unknown) as Stats
+
 	const maxBatteryAfter = Math.max(...nodeBatteriesAfter)
 	const minBatteryAfter = Math.min(...nodeBatteriesAfter)
 
+	const totalBatteryBefore = nodes.reduce((trans, { battery }) => trans + battery, 0)
 	const totalBatteryAfter = nodeBatteriesAfter.reduce(
 		(trans, battery) => trans + battery,
 		0
 	)
+
+	const averageBatteryBefore = totalBatteryBefore / nodes.length
 	const averageBatteryAfter = totalBatteryAfter / nodes.length
 
 	const totalBatteryUsage = totalBatteryBefore - totalBatteryAfter
@@ -159,12 +109,10 @@ function getStats(
 
 	return {
 		total,
-		nodeBatteriesBefore,
-		maxBatteryBefore,
-		minBatteryBefore,
+		batteryStddevBefore: batteryStatsBefore.stddev(),
+		batteryStddevAfter: batteryStatsAfter.stddev(),
 		totalBatteryBefore,
 		averageBatteryBefore,
-		nodeBatteriesAfter,
 		maxBatteryAfter,
 		minBatteryAfter,
 		totalBatteryAfter,
@@ -176,16 +124,6 @@ function getStats(
 
 /** Create a square distance matrix with each column is the distance from a node to each hole. If the number of nodes isn't equal the number of holes, fill the array with `NaN` to make it square. */
 export function createDistanceMatrix(nodes: Node[], holes: Hole[]) {
-	// return transposed([
-	// 	[4, 3, 5, 4, 6, 0, 0],
-	// 	[0, 7, 7, 3, 0, 2, 2],
-	// 	[0, 9, 8, 4, 0, 2, 2],
-	// 	[3, 0, 2, 2, 6, 0, 0],
-	// 	[0, 2, 2, 0, 4, 2, 2],
-	// 	[5, 0, 0, 3, 10, 0, 0],
-	// 	[2, 2, 0, 0, 7, 1, 1]
-	// ])
-
 	const size = Math.max(nodes.length, holes.length)
 
 	const matrix = Array.from({ length: size }).map((_, i) =>

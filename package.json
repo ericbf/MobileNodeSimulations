@@ -22,10 +22,12 @@
 		"array.prototype.flat": "^1.2.2",
 		"array.prototype.flatmap": "^1.2.2",
 		"bipartite-matching": "^1.0.0",
-		"d3-delaunay": "^5.1.6"
+		"d3-delaunay": "^5.1.6",
+		"fast-stats": "0.0.5"
 	},
 	"devDependencies": {
 		"@types/d3-delaunay": "^4.1.0",
+		"@types/fast-stats": "0.0.30",
 		"@types/node": "^12.12.14",
 		"prettier": "^1.19.1",
 		"prettier-plugin-package": "^0.3.1",

@@ -1,12 +1,11 @@
 import {
 	stringify,
-	transposeAndDo,
+	withTransposed,
 	debug,
 	asTuple,
-	isDefined,
-	findMatching
+	minimumLines,
+	makeDispatchMatrix
 } from "../helpers"
-import { minimumLines } from "./minimum-lines"
 
 /**
  * Calculate how to dispatch the nodes based on HBA.
@@ -19,7 +18,7 @@ export function hba(distanceMatrix: number[][]) {
 
 	debug(`Distance matrix:\n${stringify(matrix)}`)
 
-	transposeAndDo(matrix, subtractColumns)
+	withTransposed(matrix, subtractColumns)
 
 	debug(`Subtracted row:\n${stringify(matrix)}`)
 
@@ -31,11 +30,11 @@ export function hba(distanceMatrix: number[][]) {
 
 	debug(`Final matrix:\n${stringify(matrix)}`)
 
-	doDispatch(matrix)
+	const result = makeDispatchMatrix(matrix, (v) => v === 0)
 
-	debug(`Result:\n${stringify(matrix)}`)
+	debug(`Result:\n${stringify(result)}`)
 
-	return matrix
+	return result
 }
 
 /**
@@ -133,16 +132,4 @@ export function reduceMatrixWithLines(matrix: number[][]) {
 
 		debug(`Lines are now:`, lines)
 	}
-}
-
-function doDispatch(matrix: number[][]) {
-	const size = matrix.length
-	const edges = matrix
-		.flatMap((col, i) =>
-			col.map((value, j) => (value === 0 ? asTuple([i, j]) : undefined))
-		)
-		.filter(isDefined)
-
-	matrix.forEach((col, i) => col.forEach((_, j) => (matrix[i][j] = 0)))
-	findMatching(size, size, edges).forEach(([i, j]) => (matrix[i][j] = 1))
 }

@@ -101,11 +101,8 @@ export function transpose<T>(matrix: T[][]) {
 
 export function transposed<T>(matrix: T[][]) {
 	matrix = matrix.map((col) => col.slice(0))
-	matrix.forEach((column, i) =>
-		column.forEach(
-			(_, j) => ([matrix[i][j], matrix[j][i]] = [matrix[j][i], matrix[i][j]])
-		)
-	)
+
+	transpose(matrix)
 
 	return matrix
 }
@@ -115,10 +112,7 @@ export function transposed<T>(matrix: T[][]) {
  * @param matrix The matrix to transpose, pass to the callback, then re-transpose.
  * @param callback The callback to call with the transposed matrix.
  */
-export function transposeAndDo(
-	matrix: number[][],
-	callback: (matrix: number[][]) => void
-) {
+export function withTransposed<T>(matrix: T[][], callback: (matrix: T[][]) => void) {
 	transpose(matrix)
 	callback(matrix)
 	transpose(matrix)
@@ -218,3 +212,18 @@ export const findMatching = require("bipartite-matching") as (
 	numberOfVerticesOnRight: number,
 	edges: [number, number][]
 ) => [number, number][]
+
+export function makeDispatchMatrix<T>(matrix: T[][], isEligible: (value: T) => boolean) {
+	const size = matrix.length
+	const edges = matrix
+		.flatMap((col, i) =>
+			col.map((value, j) => (isEligible(value) ? asTuple([i, j]) : undefined))
+		)
+		.filter(isDefined)
+
+	const result = matrix.map((col) => col.map(() => 0))
+
+	findMatching(size, size, edges).forEach(([i, j]) => (result[i][j] = 1))
+
+	return result
+}
