@@ -38,7 +38,7 @@ export function batteryAware(
 
 	// Find the new maximum value in the matrix
 
-	const newMax = Math.max(...matrix.flat())
+	const newMax = 0 // Math.max(...matrix.flat())
 
 	// Make sure that the virtual nodes and holes have the maximum value set as their value
 

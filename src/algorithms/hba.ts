@@ -1,5 +1,7 @@
+import assert from "assert"
+
 import { stringify, withTransposed, debug, asTuple, getIndicesOfZeros } from "../helpers"
-import { verbosity } from ".."
+import { verbosity } from "../index"
 import { minimumLines } from "./minimum-lines"
 
 /**
@@ -25,7 +27,7 @@ export function hba(distanceMatrix: number[][]) {
 
 	debug(`Final matrix:\n${stringify(matrix)}`)
 
-	const zeros = findZeros({ matrix: matrix, original: distanceMatrix })
+	const zeros = findZeros({ matrix, original: distanceMatrix })
 
 	selectZeros(mapZeroFrequencies(zeros))
 
@@ -109,6 +111,25 @@ export function reduceMatrixWithLines(matrix: number[][]) {
 			}
 		}
 
+		if (uncoveredMin === 0) {
+			const uncoveredZeros = matrix
+				.flatMap((col, i) =>
+					col
+						.map((value, j) => ({
+							value,
+							position: asTuple([i, j]),
+							covered: colLinesByIndex[i] || rowLinesByIndex[j]
+						}))
+						.filter(({ value, covered }) => value === 0 && !covered)
+				)
+				.map(({ position }) => position)
+			throw new Error(
+				`Uncovered min should not be zero. Check line cover algorithm. ${uncoveredZeros.join(
+					" "
+				)}`
+			)
+		}
+
 		debug(`Uncovered min is ${uncoveredMin}`)
 
 		for (const [column, colLined] of Object.entries(colLinesByIndex)) {
@@ -167,7 +188,6 @@ export function findZeros({
 export interface FrequencyEntry {
 	isColumn: boolean
 	index: number
-	frequency: number
 	zeros: Zero[]
 }
 
@@ -187,7 +207,6 @@ export function mapZeroFrequencies(zeros: Zero[]) {
 			colFrequencies[zero.column] = col = {
 				isColumn: true,
 				index: zero.column,
-				frequency: 0,
 				zeros: []
 			}
 		}
@@ -196,15 +215,11 @@ export function mapZeroFrequencies(zeros: Zero[]) {
 			rowFrequencies[zero.row] = row = {
 				isColumn: false,
 				index: zero.row,
-				frequency: 0,
 				zeros: []
 			}
 		}
 
-		col.frequency += 1
 		col.zeros.push(zero)
-
-		row.frequency += 1
 		row.zeros.push(zero)
 	}
 
@@ -223,7 +238,18 @@ function selectZeros({
 			.map((entry) =>
 				asTuple([
 					entry,
-					entry.zeros.reduce((min, next) => (min.value < next.value ? min : next))
+					entry.zeros.reduce((min, next) => {
+						const minFrequency = (entry.isColumn
+							? rowFrequencies[min.row]
+							: colFrequencies[min.column]
+						).zeros.length
+						const nextFrequency = (entry.isColumn
+							? rowFrequencies[next.row]
+							: colFrequencies[next.column]
+						).zeros.length
+
+						return minFrequency < nextFrequency ? min : next
+					})
 				])
 			)
 			.sort(([a, aZero], [b, bZero]) => {
@@ -233,7 +259,16 @@ function selectZeros({
 					return byLength
 				}
 
-				return aZero.value - bZero.value
+				const aFrequency = (a.isColumn
+					? rowFrequencies[aZero.row]
+					: colFrequencies[aZero.column]
+				).zeros.length
+				const bFrequency = (b.isColumn
+					? rowFrequencies[bZero.row]
+					: colFrequencies[bZero.column]
+				).zeros.length
+
+				return aFrequency - bFrequency
 			})
 			.map(([, zero]) => zero)
 	}
@@ -260,7 +295,6 @@ function selectZeros({
 							? rowFrequencies[otherZero.row]
 							: colFrequencies[otherZero.column]
 
-					otherEntry.frequency -= 1
 					otherEntry.zeros.remove(otherZero)
 
 					if (otherEntry.zeros.length === 0) {
@@ -275,12 +309,35 @@ function selectZeros({
 		}
 	}
 
+	const allZeros = Object.values(rowFrequencies).map(({ zeros }) => zeros.slice(0))
+
+	function printChecks() {
+		const str = allZeros
+			.map((zeros, _, rows) => {
+				let output = ""
+
+				for (let i = 0; i < rows.length; i++) {
+					const zero = zeros.find(({ column }) => column === i)
+					const slot = zero ? (zero.checked ? "✓" : zero.crossed ? "⨯" : "0") : "·"
+
+					output += `    ${slot}`.slice(-4)
+				}
+
+				return output
+			})
+			.join("\n")
+
+		debug(`Checked:\n${str}`)
+	}
+
 	let zeros = getZeros()
 
-	while (zeros.length > 0) {
-		const zero = zeros.first!
+	printChecks()
 
-		checkAndRemove(zero)
+	while (zeros.length > 0) {
+		checkAndRemove(zeros.first!)
+
+		printChecks()
 
 		zeros = getZeros()
 	}

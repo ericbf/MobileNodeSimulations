@@ -1,4 +1,6 @@
-import { transposed, omit, ValueOrFunction, getIndicesOfZeros } from "../helpers"
+const findMatching = require("bipartite-matching") as FindMatching
+
+import { asTuple, debug, omit } from "../helpers"
 
 export interface Line {
 	/** Whether this is a row or a column. */
@@ -8,178 +10,156 @@ export interface Line {
 }
 
 export function minimumLines(matrix: number[][]): Line[] {
-	const greedy = greedyLines(matrix)
-	const wiki = wikiLines(matrix)
-
-	return greedy.length < wiki.length ? greedy : wiki
-}
-
-/**
- * Get the minimal number of lines to cover all the zeros. Do this by selecting the lines that cover the most uncovered zeros in turn until there are no uncovered zeros. If any line is superfluous though (its zeros are covered by lesser lines), remove it.
- * @param matrix The matrix wherein to find the least lines.
- */
-function greedyLines(matrix: number[][]): Line[] {
-	interface MaybeLine extends Line {
-		/** The index of the zeros in this line. */
-		zeros: number[]
-		allZeros: number[]
-	}
-
-	const inColumns: MaybeLine[] = matrix
-		.map((column, index) => ({
-			isColumn: true,
-			index,
-			zeros: getIndicesOfZeros(column)
-		}))
-		.filter(({ zeros }) => zeros.length > 0)
-		.map((col) => ({ ...col, allZeros: col.zeros.slice(0) }))
-
-	const inRows: MaybeLine[] = transposed(matrix)
-		.map((row, index) => ({
-			isColumn: false,
-			index,
-			zeros: getIndicesOfZeros(row)
-		}))
-		.filter(({ zeros }) => zeros.length > 0)
-		.map((row) => ({ ...row, allZeros: row.zeros.slice(0) }))
-
-	const lines: MaybeLine[] = []
-
-	let allLines = [...inColumns, ...inRows].sort(lineSorter)
-
-	while (allLines.length > 0) {
-		const next = allLines.shift()!
-
-		lines.push(next)
-
-		allLines
-			.filter(({ isColumn: column }) => column !== next.isColumn)
-			.forEach(({ zeros }) => zeros.remove(next.index))
-
-		allLines = allLines.filter(({ zeros }) => zeros.length > 0).sort(lineSorter)
-	}
-
-	function lineSorter(a: MaybeLine, b: MaybeLine) {
-		return b.zeros.length - a.zeros.length
-	}
-
-	for (let i = 0; i < lines.length; i++) {
-		const line = lines[i]
-		const superfluous = line.allZeros.every((zeroIndex) =>
-			lines.some((other) => line.isColumn !== other.isColumn && other.index === zeroIndex)
+	const edges = matrix
+		.flatMap((col, i) =>
+			col.map((value, j) => (value === 0 ? asTuple([i, j]) : undefined))
 		)
+		.filter(isDefined)
+	const size = matrix.length
 
-		if (superfluous) {
-			lines.splice(i--, 1)
-		}
+	const matches = findMatching(size, size, edges)
+
+	const cover = convertToMinimalCover(edges, matches)
+
+	const lines: Line[] = [
+		...cover[0].map((index) => ({
+			isColumn: true,
+			index
+		})),
+		...cover[1].map((index) => ({
+			isColumn: false,
+			index
+		}))
+	]
+
+	if (lines.length !== matches.length) {
+		throw new Error(`Wrong number of lines!`)
 	}
 
-	return lines.map((line) => omit(line, "zeros", "allZeros"))
+	return lines
 }
 
-interface Map<T> {
-	[key: number]: T
+function isDefined<T>(item: T | undefined): item is T {
+	return item != undefined
 }
 
-function getMap<T>(length: number, initialValue: ValueOrFunction<T>): Map<T> {
-	return Array.from({ length }).reduce<Map<T>>(
-		(trans, _, index) => (
-			(trans[index] = initialValue instanceof Function ? initialValue() : initialValue),
+type FindMatching = (
+	numberOfVerticesOnLeft: number,
+	numberOfVerticesOnRight: number,
+	edges: [number, number][]
+) => [number, number][]
+
+interface MatchVertex {
+	isLeft: boolean
+	index: number
+	matched: boolean
+	neighbors: number[]
+	match?: number
+	inCover?: boolean
+}
+
+type MatchMap = Record<number, MatchVertex>
+
+function convertToMinimalCover(edges: [number, number][], matches: [number, number][]) {
+	const leftMap = matches.reduce<MatchMap>(
+		(trans, match) => (
+			(trans[match[0]] = {
+				isLeft: true,
+				index: match[0],
+				matched: true,
+				match: match[1],
+				neighbors: []
+			}),
 			trans
 		),
 		{}
 	)
-}
 
-/**
- * Get the minimal number of lines to cover all the zeros. Do this by selecting the lines that cover the most uncovered zeros in turn until there are no uncovered zeros.
- * @param matrix The matrix wherein to find the least lines.
- */
-function wikiLines(matrix: number[][]): Line[] {
-	const assignments = matrix.map((column) =>
-		column.map((value) => ({ value, check: false, cross: false }))
+	const rightMap = matches.reduce<MatchMap>(
+		(trans, match) => (
+			(trans[match[1]] = {
+				isLeft: false,
+				index: match[1],
+				matched: true,
+				match: match[0],
+				neighbors: []
+			}),
+			trans
+		),
+		{}
 	)
 
-	for (const column of assignments) {
-		for (const [j, slot] of column.entries()) {
-			if (!slot.value && !slot.check && !slot.cross) {
-				slot.check = true
-
-				for (const otherSlot of column) {
-					if (!otherSlot.value && otherSlot !== slot) {
-						otherSlot.cross = true
-					}
-				}
-
-				for (const otherColumn of assignments) {
-					const otherSlot = otherColumn[j]
-
-					if (!otherSlot.value && otherSlot !== slot) {
-						otherSlot.cross = true
-					}
-				}
-
-				break
-			}
-		}
-	}
-
-	const colMarks = getMap(matrix.length, false)
-	const rowMarks = getMap(matrix.length, false)
-
-	let wasMarkingColumns = false
-	let newlyMarked: number[] = []
-
-	for (let j = 0; j < assignments.length; j++) {
-		const row = assignments.map((column) => column[j])
-		if (row.every(({ check }) => !check)) {
-			rowMarks[j] = true
-			newlyMarked.push(j)
-		}
-	}
-
-	while (newlyMarked.length) {
-		let lastNewlyMarked = newlyMarked
-
-		newlyMarked = []
-
-		if (wasMarkingColumns) {
-			for (const marked of lastNewlyMarked) {
-				for (const [j, slot] of assignments[marked].entries()) {
-					if (slot.check && !rowMarks[j] && !newlyMarked.includes(j)) {
-						rowMarks[j] = true
-						newlyMarked.push(j)
-					}
-				}
+	for (const [left, right] of edges) {
+		if (!leftMap[left]) {
+			leftMap[left] = {
+				isLeft: true,
+				index: left,
+				matched: false,
+				neighbors: [right]
 			}
 		} else {
-			for (const marked of lastNewlyMarked) {
-				for (const [i, column] of assignments.entries()) {
-					if (!column[marked].value && !colMarks[i] && !newlyMarked.includes(i)) {
-						colMarks[i] = true
-						newlyMarked.push(i)
-					}
-				}
-			}
+			leftMap[left].neighbors.push(right)
 		}
 
-		wasMarkingColumns = !wasMarkingColumns
+		if (!rightMap[right]) {
+			rightMap[right] = {
+				isLeft: false,
+				index: right,
+				matched: false,
+				neighbors: [left]
+			}
+		} else {
+			rightMap[right].neighbors.push(left)
+		}
 	}
 
-	const lines = [
-		...Object.entries(colMarks)
-			.filter(([, marked]) => marked)
-			.map(([i]) => ({
-				isColumn: true,
-				index: parseInt(i, 10)
-			})),
-		...Object.entries(rowMarks)
-			.filter(([, marked]) => !marked)
-			.map(([i]) => ({
-				isColumn: false,
-				index: parseInt(i, 10)
-			}))
-	]
+	function getNeighborAtIndex(vertex: MatchVertex) {
+		return (index: number) => (vertex.isLeft ? rightMap : leftMap)[index]
+	}
 
-	return lines
+	function getNeighbors(vertex: MatchVertex) {
+		return vertex.neighbors.map(getNeighborAtIndex(vertex))
+	}
+
+	const vertices = [...Object.values(leftMap), ...Object.values(rightMap)]
+
+	let unmatched: MatchVertex | undefined
+
+	while (
+		(unmatched = vertices.find(
+			({ matched, inCover }) => !matched && inCover == undefined
+		))
+	) {
+		unmatched.inCover = false
+
+		for (const neighbor of getNeighbors(unmatched)) {
+			if (neighbor.inCover != undefined) {
+				// Don't reprocess what we've already seen
+				continue
+			}
+
+			if (neighbor.matched) {
+				neighbor.inCover = true
+
+				const mate = getNeighborAtIndex(neighbor)(neighbor.match!)
+
+				mate.matched = false
+			}
+		}
+	}
+
+	for (const vertex of Object.values(leftMap)) {
+		if (vertex.inCover == undefined) {
+			vertex.inCover = true
+		}
+	}
+
+	return asTuple([
+		Object.values(leftMap)
+			.filter(({ inCover }) => inCover)
+			.map(({ index }) => index),
+		Object.values(rightMap)
+			.filter(({ inCover }) => inCover)
+			.map(({ index }) => index)
+	])
 }
